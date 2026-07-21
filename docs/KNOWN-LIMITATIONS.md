@@ -54,6 +54,13 @@
 
 `scripts/release.js` 依赖 `gh` CLI 与 `GH_TOKEN` / `GITHUB_TOKEN`。
 
+### 4. 自动更新
+
+- 客户端已接 `electron-updater`（检查自动、下载需确认）。  
+- 推送依赖 Release 上的 **`latest.yml` + setup + blockmap`**，且 **version 必须递增**。  
+- 完整流程见 [`docs/release/auto-update.md`](./release/auto-update.md)。  
+- **Windows 代码签名**仍是生产级自动更新的外部条件。
+
 ## 历史 schema
 
 SQLite 迁移中可能仍存在 team / vera / webhook 等历史表定义。  

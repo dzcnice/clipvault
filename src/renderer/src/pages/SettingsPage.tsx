@@ -697,14 +697,24 @@ export default function SettingsPage(): JSX.Element {
             <ImportExport onExport={handleExport} onImport={handleImport} />
           </Section>
 
-          <Section title="检查更新" description="从 GitHub Releases 拉取更新元数据。">
+          <Section
+            title="检查更新"
+            description="从 GitHub Releases 读取 latest.yml。检查自动进行，下载需你确认。详见 docs/release/auto-update.md。"
+          >
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 className="cv-btn cv-btn-secondary text-xs"
                 onClick={() => {
-                  void checkUpdate()
-                  showPixelToast('正在检查更新…')
+                  void checkUpdate().then((info) => {
+                    if (info?.version) {
+                      showPixelToast(`发现 ${info.version}`)
+                    } else if (updateStatus === 'error') {
+                      showPixelToast('检查失败，请看右下角提示')
+                    } else {
+                      showPixelToast('已是最新或暂无更新')
+                    }
+                  })
                 }}
               >
                 <RefreshCw size={14} />
@@ -724,9 +734,12 @@ export default function SettingsPage(): JSX.Element {
               </select>
               <span className="text-xs text-muted-foreground">
                 状态：{updateStatus}
-                {updateInfo?.version ? ` · 可用 ${updateInfo.version}` : ''}
+                {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
               </span>
             </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              安装包再次运行时：同一应用会覆盖升级，本地钥匙库默认保留。勿混用「仅当前用户 / 整机」两种安装方式。
+            </p>
           </Section>
 
           <Section title="关于">

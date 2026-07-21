@@ -1,15 +1,10 @@
 /**
- * Sprint 14 · TASK-072 AutoUpdater 封装
+ * AutoUpdater 封装 · v3.1
  *
- * 职责：
- *   - 统一包装 electron-updater.autoUpdater
- *   - 启动 30s 后首次检查，之后每 4h 一次
- *   - 通过 IPC 事件广播 status / progress 给渲染进程
- *   - 支持 stable / beta 通道切换
- *
- * 整合提示：
- *   - 真实发布 provider (GitHub / generic) 留给整合 agent 在 electron-builder.yml
- *     中补 `publish:` 字段。本模块仅负责运行时行为。
+ * - 启动 30s 后首次检查，之后每 4h
+ * - 检查自动 / 下载需用户确认（autoDownload=false）
+ * - 下载完成后可「立即重启安装」或退出时安装
+ * - 发布源 404/DNS 失败时暂停周期检查；手动检查会重新尝试
  */
 
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
@@ -28,6 +23,21 @@ import { resolveChannel } from './channel'
 const FIRST_CHECK_DELAY_MS = 30_000
 const INTERVAL_MS = 4 * 60 * 60 * 1000 // 4h
 
+function humanizeUpdaterError(msg: string): string {
+  const m = msg || '未知错误'
+  if (/404|ENOTFOUND|getaddrinfo|ECONNREFUSED|net::/i.test(m)) {
+    return '无法连接更新服务器，请检查网络或稍后在设置中重试'
+  }
+  if (/sha512|checksum|blockmap|ERR_UPDATER/i.test(m)) {
+    return '更新包校验失败，请稍后重试或从官网重新下载安装包'
+  }
+  if (/EPERM|EBUSY|locked|access/i.test(m)) {
+    return '文件被占用，请关闭其它 ClipVault 窗口后重试'
+  }
+  if (m.length > 160) return `${m.slice(0, 160)}…`
+  return m
+}
+
 export class UpdaterService {
   private mainWindow: BrowserWindow | null = null
   private statusCbs: Array<(e: UpdaterEvent) => void> = []
@@ -40,8 +50,8 @@ export class UpdaterService {
   private bound = false
   private currentChannel: UpdateChannel = 'stable'
   /**
-   * ρ5 · 发布源不可达时禁用周期性检查，避免每 4h 刷 404 污染日志。
-   * 手动 `checkForUpdates()` 仍可尝试（允许主人配好 publish 后立即生效）。
+   * 发布源不可达时禁用周期性检查，避免刷屏。
+   * 手动 checkForUpdates() 会清零并重试。
    */
   private sourceDisabled = false
 
@@ -49,8 +59,11 @@ export class UpdaterService {
     this.mainWindow = mainWindow
     this.bindListeners()
 
+    // 大厂常见：自动检查，下载需确认
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
+    // 允许降级检测关闭；仅更高版本提示
+    autoUpdater.allowDowngrade = false
     autoUpdater.logger = {
       info: (m: unknown) => logger.info(`[updater] ${String(m)}`),
       warn: (m: unknown) => logger.warn(`[updater] ${String(m)}`),
@@ -58,6 +71,8 @@ export class UpdaterService {
       debug: () => {}
     } as never
 
+    // 应用当前通道
+    this.applyChannelConfig(this.currentChannel)
     this.scheduleChecks()
   }
 
@@ -80,35 +95,47 @@ export class UpdaterService {
     }, FIRST_CHECK_DELAY_MS)
 
     this.intervalTimer = setInterval(() => {
-      if (this.sourceDisabled) return // ρ5 · 发布源 404 后跳过，避免日志刷屏
+      if (this.sourceDisabled) return
       void this.checkForUpdates().catch((e) =>
         logger.warn(`[updater] periodic check failed: ${(e as Error).message}`)
       )
     }, INTERVAL_MS)
   }
 
+  /** 手动检查时重新启用周期源 */
+  reenableSource(): void {
+    if (this.sourceDisabled) {
+      this.sourceDisabled = false
+      logger.info('[updater] update source re-enabled (manual check)')
+    }
+  }
+
   async checkForUpdates(): Promise<UpdateInfoPayload | null> {
+    // 用户/设置触发的检查：允许恢复源
+    this.reenableSource()
     try {
       this.setStatus('checking')
       const res = await autoUpdater.checkForUpdates()
+      // 能连上源即恢复周期检查
+      this.sourceDisabled = false
       const info = res?.updateInfo ? this.toInfoPayload(res.updateInfo) : null
       return info
     } catch (err) {
-      const msg = (err as Error).message ?? ''
-      // ρ5 · 发布源 404 / ENOTFOUND 视为"未配置 publish 源"，禁用后续周期检查
+      const raw = (err as Error).message ?? ''
       if (
-        /404/.test(msg) ||
-        /ENOTFOUND/.test(msg) ||
-        /releases\.atom/.test(msg)
+        /404/.test(raw) ||
+        /ENOTFOUND/.test(raw) ||
+        /releases\.atom/.test(raw) ||
+        /ECONNREFUSED/.test(raw)
       ) {
         if (!this.sourceDisabled) {
           this.sourceDisabled = true
           logger.warn(
-            '[updater] update source unreachable (404/ENOTFOUND), periodic checks disabled'
+            '[updater] update source unreachable; periodic checks paused until manual retry'
           )
         }
       }
-      this.lastError = msg
+      this.lastError = humanizeUpdaterError(raw)
       this.setStatus('error')
       return null
     }
@@ -119,24 +146,29 @@ export class UpdaterService {
       this.setStatus('downloading')
       await autoUpdater.downloadUpdate()
     } catch (err) {
-      this.lastError = (err as Error).message
+      const raw = (err as Error).message ?? ''
+      this.lastError = humanizeUpdaterError(raw)
       this.setStatus('error')
       throw err
     }
   }
 
   quitAndInstall(): void {
+    // isSilent=false, isForceRunAfter=true
     autoUpdater.quitAndInstall(false, true)
   }
 
   setChannel(channel: UpdateChannel): void {
     this.currentChannel = channel
+    this.applyChannelConfig(channel)
+    this.reenableSource()
+    logger.info(`[updater] channel switched to ${channel}`)
+  }
+
+  private applyChannelConfig(channel: UpdateChannel): void {
     const cfg = resolveChannel(channel)
     autoUpdater.allowPrerelease = cfg.allowPrerelease
     autoUpdater.channel = cfg.channel
-    logger.info(
-      `[updater] channel switched to ${channel} (allowPrerelease=${cfg.allowPrerelease})`
-    )
   }
 
   onStatus(cb: (e: UpdaterEvent) => void): () => void {
@@ -161,10 +193,12 @@ export class UpdaterService {
     this.bound = true
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
+      this.sourceDisabled = false
       this.lastInfo = this.toInfoPayload(info)
       this.setStatus('available')
     })
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+      this.sourceDisabled = false
       this.lastInfo = info ? this.toInfoPayload(info) : undefined
       this.setStatus('not-available')
     })
@@ -182,7 +216,7 @@ export class UpdaterService {
       this.setStatus('downloaded')
     })
     autoUpdater.on('error', (err: Error) => {
-      this.lastError = err.message
+      this.lastError = humanizeUpdaterError(err.message)
       this.setStatus('error')
     })
   }

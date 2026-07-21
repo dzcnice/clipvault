@@ -14,6 +14,8 @@
 
 仓库：https://github.com/dzcnice/clipvault
 
+应用内可 **检查更新**（GitHub `latest.yml`）。发版与升级规范见 [docs/release/auto-update.md](./docs/release/auto-update.md)。
+
 ## 核心能力
 
 ### 剪贴板与凭证

@@ -1,31 +1,33 @@
 /**
- * UpdateNotifier (TASK-072)
+ * UpdateNotifier · 应用内更新提示
  *
- * 通过 useUpdater 监听 autoUpdater 状态，向用户展示：
- *   - 有新版本 → 显示下载按钮
- *   - 下载中 → 进度条
- *   - 已下载 → "立即重启安装"按钮
- *   - 错误 → 简短提示
- *
- * 采用低侵入式右下角 toast；未挂载 API 时静默无害。
+ * - 有新版本 → 下载
+ * - 下载中 → 进度
+ * - 已下载 → 立即重启安装
+ * - 错误 → 文案 + 重试检查
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
-import { Download, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Download, RefreshCw, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { useUpdater } from '@renderer/hooks/useUpdater'
 
 export function UpdateNotifier(): JSX.Element | null {
-  const { status, info, progress, error, download, quitAndInstall } = useUpdater()
+  const { status, info, progress, error, download, quitAndInstall, check } =
+    useUpdater()
+  const [dismissed, setDismissed] = useState(false)
 
-  const visible = useMemo(
-    () =>
+  const visible = useMemo(() => {
+    if (dismissed && status !== 'downloading' && status !== 'downloaded') {
+      return false
+    }
+    return (
       status === 'available' ||
       status === 'downloading' ||
       status === 'downloaded' ||
-      status === 'error',
-    [status]
-  )
+      status === 'error'
+    )
+  }, [status, dismissed])
 
   if (!visible) return null
 
@@ -34,15 +36,29 @@ export function UpdateNotifier(): JSX.Element | null {
       role="status"
       className="fixed bottom-4 right-4 z-50 w-80 rounded-lg border bg-background p-4 shadow-lg"
       data-testid="update-notifier"
+      style={{ borderColor: 'var(--line)', boxShadow: 'var(--px-shadow)' }}
     >
+      <button
+        type="button"
+        className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:bg-muted"
+        aria-label="关闭"
+        onClick={() => setDismissed(true)}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+
       {status === 'available' && (
         <>
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <div className="mb-2 flex items-center gap-2 pr-6 text-sm font-semibold">
             <RefreshCw className="h-4 w-4" /> 发现新版本 {info?.version}
           </div>
-          {info?.releaseNotes && (
+          {info?.releaseNotes ? (
             <p className="mb-3 max-h-24 overflow-auto text-xs text-muted-foreground">
               {info.releaseNotes}
+            </p>
+          ) : (
+            <p className="mb-3 text-xs text-muted-foreground">
+              建议在空闲时更新。下载不会影响当前使用。
             </p>
           )}
           <Button size="sm" onClick={() => void download()}>
@@ -53,7 +69,7 @@ export function UpdateNotifier(): JSX.Element | null {
 
       {status === 'downloading' && (
         <>
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <div className="mb-2 flex items-center gap-2 pr-6 text-sm font-semibold">
             <Download className="h-4 w-4 animate-pulse" /> 正在下载 {info?.version}
           </div>
           <div className="h-2 w-full rounded bg-muted">
@@ -73,11 +89,11 @@ export function UpdateNotifier(): JSX.Element | null {
 
       {status === 'downloaded' && (
         <>
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <div className="mb-2 flex items-center gap-2 pr-6 text-sm font-semibold">
             <CheckCircle2 className="h-4 w-4 text-green-500" /> 更新已就绪
           </div>
           <p className="mb-3 text-xs text-muted-foreground">
-            版本 {info?.version} 已下载，重启后生效
+            版本 {info?.version} 已下载完成。本地数据会保留，重启后完成安装。
           </p>
           <Button size="sm" onClick={() => void quitAndInstall()}>
             立即重启安装
@@ -86,10 +102,22 @@ export function UpdateNotifier(): JSX.Element | null {
       )}
 
       {status === 'error' && (
-        <div className="flex items-start gap-2 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <span>更新失败：{error ?? '未知错误'}</span>
-        </div>
+        <>
+          <div className="mb-2 flex items-start gap-2 pr-6 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>更新失败：{error ?? '未知错误'}</span>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setDismissed(false)
+              void check()
+            }}
+          >
+            <RefreshCw className="mr-1 h-4 w-4" /> 重试检查
+          </Button>
+        </>
       )}
     </div>
   )

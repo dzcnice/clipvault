@@ -42,11 +42,20 @@ win:
   #   AZURE_KEY_VAULT_URI / AZURE_CERT_NAME / AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_CLIENT_SECRET （HSM 模式）
   # rfc3161TimeStampServer: http://timestamp.digicert.com
 afterPack: scripts/afterPack.js
+# NSIS：同 appId 覆盖升级；保留 %APPDATA% 用户库；见 build/installer.nsh
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  artifactName: ${name}-${version}-setup.${ext}
+  include: build/installer.nsh
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
