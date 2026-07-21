@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import TitleBar from '../components/TitleBar'
+import { SidebarUpdateButton } from '../components/SidebarUpdateButton'
 import clipVaultLogo from '../assets/clipvault-logo-v3.png'
 import {
   Activity,
@@ -132,6 +133,7 @@ export default function MainLayout(): JSX.Element {
             <p className="font-body mt-0.5 text-[11px] text-muted-foreground">
               本机存档 · 免登录
             </p>
+            <SidebarUpdateButton />
           </div>
         </aside>
 

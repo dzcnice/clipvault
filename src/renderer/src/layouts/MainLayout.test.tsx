@@ -21,6 +21,15 @@ function renderLayout(): void {
 
 beforeEach(() => {
   localStorage.clear()
+  // useUpdater 在无 sprint14 API 时安全降级
+  ;(window as unknown as { api?: unknown }).api = {
+    system: {
+      getVersion: async () => ({
+        success: true,
+        data: { version: '3.1.1', builtAt: new Date().toISOString() }
+      })
+    }
+  }
 })
 
 describe('MainLayout · v3.1 personal nav', () => {

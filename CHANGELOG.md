@@ -2,6 +2,21 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.1.2] - 2026-07-21
+
+### Added
+- 侧栏左下角 **检查更新** 小按钮（自动检测状态：有更新 / 下载中 / 重启安装）
+
+### Fixed
+- Windows 未签名安装包应用内更新失败（`not digitally signed`）：无签名凭据时跳过 Authenticode 校验，仍保留 sha512 完整性校验
+- 更新错误文案对「未签名拦截」给出可操作说明
+
+### Notes
+- 若当前是 **3.1.0/3.1.1** 且更新被签名策略拦住：请先从 GitHub 手动安装 **3.1.2** 一次，之后自动更新即可
+- 安装包：`dist/clipvault-3.1.2-setup.exe`
+
+---
+
 ## [3.1.1] - 2026-07-21
 
 ### Added

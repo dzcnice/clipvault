@@ -25,6 +25,9 @@ const INTERVAL_MS = 4 * 60 * 60 * 1000 // 4h
 
 function humanizeUpdaterError(msg: string): string {
   const m = msg || '未知错误'
+  if (/not digitally signed|SignerCertificate|Code integrity|not signed by the application owner/i.test(m)) {
+    return '更新包未代码签名，当前环境拦截了安装。请从 GitHub Release 下载安装包覆盖安装，或配置签名证书后重发'
+  }
   if (/404|ENOTFOUND|getaddrinfo|ECONNREFUSED|net::/i.test(m)) {
     return '无法连接更新服务器，请检查网络或稍后在设置中重试'
   }
@@ -64,6 +67,28 @@ export class UpdaterService {
     autoUpdater.autoInstallOnAppQuit = true
     // 允许降级检测关闭；仅更高版本提示
     autoUpdater.allowDowngrade = false
+    /**
+     * Windows NsisUpdater：默认用 Authenticode 校验发布者。
+     * 未签名安装包会报 “not digitally signed / SignerCertificate null”。
+     * 无 CSC/Azure 凭据时注入 no-op 校验（返回 null = 通过）；sha512 仍由 electron-updater 校验。
+     * 设 CLIPVAULT_REQUIRE_UPDATE_SIGNATURE=1 可强制走系统签名校验。
+     */
+    const requireSig =
+      process.env.CLIPVAULT_REQUIRE_UPDATE_SIGNATURE === '1' ||
+      Boolean(process.env.CSC_LINK && process.env.CSC_KEY_PASSWORD) ||
+      Boolean(process.env.AZURE_KEY_VAULT_URI && process.env.AZURE_CERT_NAME)
+    if (process.platform === 'win32' && !requireSig) {
+      const nsis = autoUpdater as typeof autoUpdater & {
+        verifyUpdateCodeSignature?: (
+          publisherNames: string[],
+          path: string
+        ) => Promise<string | null>
+      }
+      nsis.verifyUpdateCodeSignature = async () => null
+      logger.warn(
+        '[updater] Windows code-signature verify bypassed (unsigned builds; sha512 still enforced)'
+      )
+    }
     autoUpdater.logger = {
       info: (m: unknown) => logger.info(`[updater] ${String(m)}`),
       warn: (m: unknown) => logger.warn(`[updater] ${String(m)}`),
@@ -71,7 +96,7 @@ export class UpdaterService {
       debug: () => {}
     } as never
 
-    // 应用当前通道
+    // 应用当前通道：默认 stable（与 latest.yml 对应）
     this.applyChannelConfig(this.currentChannel)
     this.scheduleChecks()
   }

@@ -1,7 +1,7 @@
 # ClipVault
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Version](https://img.shields.io/badge/version-v3.1.1-brightgreen)](#开发)
+[![Version](https://img.shields.io/badge/version-v3.1.2-brightgreen)](#开发)
 
 **ClipVault** 是本地优先的个人凭证与剪贴板工作台：系统钥匙串保护的保险库、智能剪贴板历史、片段库、TOTP / 健康检查、导入导出——数据不出本机。
 
@@ -9,8 +9,8 @@
 
 ### 下载
 
-- **最新版 Release**：[v3.1.1](https://github.com/dzcnice/clipvault/releases/tag/v3.1.1)
-- **Windows 安装包**：[`clipvault-3.1.1-setup.exe`](https://github.com/dzcnice/clipvault/releases/download/v3.1.1/clipvault-3.1.1-setup.exe)
+- **最新版 Release**：[v3.1.2](https://github.com/dzcnice/clipvault/releases/tag/v3.1.2)
+- **Windows 安装包**：[`clipvault-3.1.2-setup.exe`](https://github.com/dzcnice/clipvault/releases/download/v3.1.2/clipvault-3.1.2-setup.exe)
 
 仓库：https://github.com/dzcnice/clipvault
 

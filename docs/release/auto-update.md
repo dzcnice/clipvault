@@ -84,7 +84,8 @@ gh release create "v$(node -p "require('./package.json').version")" \
 | 下载 | **需用户点击**（不静默占带宽） |
 | 安装 | 下载完提示「立即重启安装」；也可退出时安装 |
 | 数据 | 默认保留本地库 |
-| 失败 | 可关闭提示，设置里可重试；周期检查在源 404 时暂停直到手动检查 |
+| 失败 | 可关闭提示，侧栏/设置可重试；周期检查在源 404 时暂停直到手动检查 |
+| 未签名包 | Windows 下 `verifyUpdateCodeSignature=false`（无 CSC/Azure 凭据时），仍用 **sha512** 校验；有签名后自动恢复严格校验 |
 
 ---
 
