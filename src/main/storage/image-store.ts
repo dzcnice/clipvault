@@ -5,8 +5,15 @@
  * 目录默认 %userData%/images，可在设置中自定义（prefs.imagesDir）。
  */
 
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs'
-import { join } from 'path'
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+  existsSync,
+  copyFileSync
+} from 'fs'
+import { join, basename } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { resolveImagesDir, getDefaultImagesDir } from '../prefs'
 import { logger } from '../utils/logger'
@@ -139,6 +146,77 @@ export function deleteImageFile(filePath: string | null | undefined): void {
   } catch {
     // 单张图删不掉不影响主逻辑
   }
+}
+
+/**
+ * 将历史截图从旧目录迁移到新目录，并更新 clipboard_history.image_path。
+ * - 仅处理磁盘上仍存在的文件
+ * - 复制后更新 DB；原文件保留（避免半失败丢图）
+ * - 失败条数计入 failed，不中断整批
+ */
+export function migrateClipboardImagePaths(
+  newDir: string
+): { scanned: number; moved: number; updated: number; failed: number; skipped: number } {
+  // lazy import 避免 image-store ↔ db 循环在模块顶层爆炸
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getDatabase } = require('../../db/connection') as {
+    getDatabase: () => {
+      prepare: (sql: string) => {
+        all: (...a: unknown[]) => Array<{ id: string; image_path: string }>
+        run: (...a: unknown[]) => unknown
+      }
+    }
+  }
+
+  if (!existsSync(newDir)) {
+    mkdirSync(newDir, { recursive: true, mode: 0o700 })
+  }
+
+  const db = getDatabase()
+  const rows = db
+    .prepare(
+      `SELECT id, image_path FROM clipboard_history
+       WHERE type = 'image' AND image_path IS NOT NULL AND image_path != ''`
+    )
+    .all() as Array<{ id: string; image_path: string }>
+
+  let moved = 0
+  let updated = 0
+  let failed = 0
+  let skipped = 0
+  const update = db.prepare(`UPDATE clipboard_history SET image_path = ? WHERE id = ?`)
+
+  for (const row of rows) {
+    const oldPath = row.image_path
+    if (!oldPath) {
+      skipped += 1
+      continue
+    }
+    // 已在目标目录
+    if (oldPath.startsWith(newDir)) {
+      skipped += 1
+      continue
+    }
+    if (!existsSync(oldPath)) {
+      skipped += 1
+      continue
+    }
+    try {
+      const name = basename(oldPath) || `${uuidv4()}.png`
+      const dest = join(newDir, name)
+      // 重名则加 uuid 前缀
+      const finalDest = existsSync(dest) ? join(newDir, `${uuidv4()}_${name}`) : dest
+      copyFileSync(oldPath, finalDest)
+      moved += 1
+      update.run(finalDest, row.id)
+      updated += 1
+    } catch (err) {
+      failed += 1
+      logger.warn('[image-store] migrate failed for', row.id, err)
+    }
+  }
+
+  return { scanned: rows.length, moved, updated, failed, skipped }
 }
 
 export const __test__ = {

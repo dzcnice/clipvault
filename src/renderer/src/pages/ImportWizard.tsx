@@ -41,8 +41,23 @@ export function ImportWizard(): JSX.Element {
       <header>
         <h1 className="text-xl font-semibold">从第三方密码管理器导入</h1>
         <p className="text-sm text-muted-foreground">
-          支持 1Password / Bitwarden / Chrome / LastPass。导入的数据经 DEK 加密后落库。
+          支持 1Password / Bitwarden / Chrome / LastPass / KeePass。导入的数据经 DEK
+          加密后落库。
         </p>
+        <ul className="mt-2 list-inside list-disc text-xs text-muted-foreground space-y-1">
+          <li>
+            <span className="text-foreground">跳过策略</span>
+            ：解析失败、空密钥、格式不支持的条目会跳过，并在结果中统计
+          </li>
+          <li>
+            <span className="text-foreground">重复项</span>
+            ：当前按「新增」写入，不会自动覆盖同名凭证；导入前建议先备份
+          </li>
+          <li>
+            <span className="text-foreground">Chrome</span>
+            ：请先关闭浏览器再导出 CSV，避免文件被占用
+          </li>
+        </ul>
       </header>
 
       <nav className="flex flex-wrap gap-2 border-b">

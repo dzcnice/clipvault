@@ -2,6 +2,27 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.1.1] - 2026-07-21
+
+### Added
+- 截图目录变更时迁移仍存在的历史图片文件并更新 `image_path`
+- 导入向导说明：跳过策略、重复项行为、Chrome 导出注意
+- 自动更新 / NSIS 升级规范文档（`docs/release/auto-update.md`）
+- 签名接线说明（无证书 / pfx / Azure KV）写清可执行步骤
+
+### Changed
+- NSIS：引导式安装、卸载默认不删用户库、覆盖升级策略
+- Updater：错误可读文案、失败可重试、手动检查恢复周期源
+- UpdateNotifier：可关闭、下载/重启说明更清晰
+- prefs：支持 autoClear / hideAfterCopy 等字段完整读写
+
+### Notes
+- 安装包：`dist/clipvault-3.1.1-setup.exe`
+- 从 3.1.0 升级：应用内「检查更新」或运行新 setup 覆盖安装，数据保留
+- Windows 代码签名仍需外部证书
+
+---
+
 ## [3.1.0] - 2026-07-21
 
 ### Changed

@@ -255,12 +255,33 @@ export default function SettingsPage(): JSX.Element {
     }
   }
 
+  const toastImageMigrate = (data: {
+    imageMigrate?: {
+      moved?: number
+      updated?: number
+      failed?: number
+      scanned?: number
+    }
+  }): void => {
+    const m = data.imageMigrate
+    if (!m) return
+    if ((m.moved ?? 0) > 0) {
+      showPixelToast(
+        `已迁移 ${m.moved} 张截图到新目录` +
+          ((m.failed ?? 0) > 0 ? `（${m.failed} 张失败）` : '')
+      )
+    } else if ((m.scanned ?? 0) > 0) {
+      showPixelToast('目录已更新（无需迁移或文件已在目标目录）')
+    }
+  }
+
   const handlePickImagesDir = async (): Promise<void> => {
     try {
       const res = await window.api.prefs.pickImagesDir()
       if (res.success && res.data) {
         applyPrefsData(res.data)
         showPixelToast('截图目录已更新')
+        toastImageMigrate(res.data as { imageMigrate?: { moved?: number; failed?: number; scanned?: number } })
       } else if (res.error && res.error !== '已取消') {
         showPixelToast(res.error)
       }
@@ -275,6 +296,7 @@ export default function SettingsPage(): JSX.Element {
       if (res.success && res.data) {
         applyPrefsData(res.data)
         showPixelToast('已恢复默认截图目录')
+        toastImageMigrate(res.data as { imageMigrate?: { moved?: number; failed?: number; scanned?: number } })
       } else {
         showPixelToast(res.error || '重置失败')
       }
@@ -420,7 +442,7 @@ export default function SettingsPage(): JSX.Element {
 
           <Section
             title="截图存储路径"
-            description="新截图会保存到此文件夹；历史记录里已有的绝对路径不会自动搬家。改路径后终端粘贴的是新位置。"
+            description="新截图保存到此文件夹。更换目录时会尝试把仍存在的历史截图复制到新位置并更新记录；找不到的旧文件会跳过。"
           >
             <div
               className="rounded-xl border p-3"

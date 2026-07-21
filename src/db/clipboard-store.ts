@@ -1,8 +1,10 @@
 // @ts-nocheck
 /**
- * 剪贴板数据存储层 · restored from dist-types (v3.1)
+ * 剪贴板数据存储层 · v3.1 personal
  * workspace 固定 personal；content 加密 + legacy backfill
- * 注：@ts-nocheck 因从编译产物回填，后续可逐步补全类型
+ *
+ * 工程债：曾从 dist-types 回填，保留 @ts-nocheck。
+ * 与 clipboard IPC / preload 契约一致；可按函数逐步补类型后移除 nocheck。
  */
 
 /**

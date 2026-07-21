@@ -1,8 +1,10 @@
 // @ts-nocheck
 /**
- * 凭证数据存储层 · restored from dist-types (v3.1)
+ * 凭证数据存储层 · v3.1 personal
  * workspace 固定 personal；DEK 加密 value
- * 注：@ts-nocheck 因从编译产物回填，后续可逐步补全类型
+ *
+ * 工程债：文件曾从 dist-types 回填，保留 @ts-nocheck 以保证运行时完整。
+ * 公共导出名与 credential-store.d.ts / IPC 契约一致；后续可按函数逐步补类型后去掉 nocheck。
  */
 
 /**

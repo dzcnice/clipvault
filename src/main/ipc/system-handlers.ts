@@ -14,8 +14,7 @@ import {
   getDefaultImagesDir,
   ensureImagesDirWritable,
   normalizeImagesDir,
-  type ClipVaultPrefs,
-  type ImagePasteMode
+  type ClipVaultPrefs
 } from '../prefs'
 
 export function registerSystemHandlers(): void {
@@ -81,25 +80,46 @@ export function registerSystemHandlers(): void {
     wrapHandler(
       async (
         _event,
-        partial: Partial<{
-          imagePasteMode: ImagePasteMode
-          imagesDir: string | null
-        }>
+        partial: Partial<ClipVaultPrefs>
       ): Promise<
         ApiResponse<
           ClipVaultPrefs & {
             resolvedImagesDir: string
             defaultImagesDir: string
+            imageMigrate?: {
+              scanned: number
+              moved: number
+              updated: number
+              failed: number
+              skipped: number
+            }
           }
         >
       > => {
+        const prevDir = resolveImagesDir()
         const patch: Partial<ClipVaultPrefs> = {}
         if (partial?.imagePasteMode) {
           patch.imagePasteMode = partial.imagePasteMode
         }
+        if (typeof partial?.autoClearTtlMs === 'number') {
+          patch.autoClearTtlMs = partial.autoClearTtlMs
+        }
+        if (typeof partial?.hideAfterCopy === 'boolean') {
+          patch.hideAfterCopy = partial.hideAfterCopy
+        }
+        if (typeof partial?.minClipboardLength === 'number') {
+          patch.minClipboardLength = partial.minClipboardLength
+        }
+        if (typeof partial?.onboardingTipsSeen === 'boolean') {
+          patch.onboardingTipsSeen = partial.onboardingTipsSeen
+        }
+        let willMigrate = false
+        let targetDir: string | null = null
         if (partial && 'imagesDir' in partial) {
           if (partial.imagesDir === null || partial.imagesDir === '') {
             patch.imagesDir = null
+            targetDir = getDefaultImagesDir()
+            willMigrate = prevDir !== targetDir
           } else {
             const dir = normalizeImagesDir(partial.imagesDir)
             if (!dir) {
@@ -113,22 +133,54 @@ export function registerSystemHandlers(): void {
               }
             }
             patch.imagesDir = dir
+            targetDir = dir
+            willMigrate = prevDir !== dir
           }
         }
         const next = setPrefs(patch)
+        let imageMigrate:
+          | {
+              scanned: number
+              moved: number
+              updated: number
+              failed: number
+              skipped: number
+            }
+          | undefined
+        if (willMigrate && targetDir) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { migrateClipboardImagePaths } = require('../storage/image-store') as {
+              migrateClipboardImagePaths: (d: string) => {
+                scanned: number
+                moved: number
+                updated: number
+                failed: number
+                skipped: number
+              }
+            }
+            imageMigrate = migrateClipboardImagePaths(targetDir)
+            logger.info(
+              `[prefs] image migrate → ${targetDir}: moved=${imageMigrate.moved} failed=${imageMigrate.failed}`
+            )
+          } catch (err) {
+            logger.warn('[prefs] image migrate failed:', err)
+          }
+        }
         return {
           success: true,
           data: {
             ...next,
             resolvedImagesDir: resolveImagesDir(),
-            defaultImagesDir: getDefaultImagesDir()
+            defaultImagesDir: getDefaultImagesDir(),
+            imageMigrate
           }
         }
       }
     )
   )
 
-  /** 弹出系统文件夹选择器，选定后写入 prefs.imagesDir */
+  /** 弹出系统文件夹选择器，选定后写入 prefs.imagesDir，并尝试迁移历史截图 */
   ipcMain.handle(
     IPC_CHANNELS.PREFS_PICK_IMAGES_DIR,
     wrapHandler(
@@ -139,14 +191,22 @@ export function registerSystemHandlers(): void {
           ClipVaultPrefs & {
             resolvedImagesDir: string
             defaultImagesDir: string
+            imageMigrate?: {
+              scanned: number
+              moved: number
+              updated: number
+              failed: number
+              skipped: number
+            }
           }
         >
       > => {
+        const prevDir = resolveImagesDir()
         const win = BrowserWindow.fromWebContents(event.sender)
         const opts: Electron.OpenDialogOptions = {
           title: '选择截图存储文件夹',
           properties: ['openDirectory', 'createDirectory'],
-          defaultPath: resolveImagesDir()
+          defaultPath: prevDir
         }
         const result = win
           ? await dialog.showOpenDialog(win, opts)
@@ -166,12 +226,39 @@ export function registerSystemHandlers(): void {
           }
         }
         const next = setPrefs({ imagesDir: dir })
+        let imageMigrate:
+          | {
+              scanned: number
+              moved: number
+              updated: number
+              failed: number
+              skipped: number
+            }
+          | undefined
+        if (prevDir !== dir) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { migrateClipboardImagePaths } = require('../storage/image-store') as {
+              migrateClipboardImagePaths: (d: string) => {
+                scanned: number
+                moved: number
+                updated: number
+                failed: number
+                skipped: number
+              }
+            }
+            imageMigrate = migrateClipboardImagePaths(dir)
+          } catch (err) {
+            logger.warn('[prefs] pick dir migrate failed:', err)
+          }
+        }
         return {
           success: true,
           data: {
             ...next,
             resolvedImagesDir: resolveImagesDir(),
-            defaultImagesDir: getDefaultImagesDir()
+            defaultImagesDir: getDefaultImagesDir(),
+            imageMigrate
           }
         }
       }

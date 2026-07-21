@@ -4,6 +4,53 @@
 
 > 当前 `electron-builder.yml` 已留好占位，所有证书材料均通过**环境变量**注入，源码仓库**不会**包含任何密钥文件。
 
+## 当前项目接线（可直接照做）
+
+| 项 | 位置 |
+|----|------|
+| 签名脚本 | `npm run sign:win` → `scripts/sign.js` |
+| 检测模式 | `CSC_LINK`+`CSC_KEY_PASSWORD` → pfx；或 Azure Key Vault 变量 → azure |
+| 发版流水线 | `scripts/release.js` 在 build 后调用签名（无凭据时需 `ALLOW_UNSIGNED_RELEASE=1`） |
+| 打包配置 | `electron-builder.yml` → `signAndEditExecutable: false`（签名走脚本，避免 builder 双签冲突） |
+| 自动更新 | 签名后更新包更易通过 Windows 信任；未签名仍可用 sha512 校验 |
+
+### 无证书时（现状）
+
+```bash
+# 仅构建，不签名
+npm run build:win
+# 发 Release 时允许未签名
+set ALLOW_UNSIGNED_RELEASE=1
+npm run release -- --skip-sign
+```
+
+### 有 pfx 时
+
+```powershell
+$env:CSC_LINK = "C:\certs\clipvault.pfx"
+$env:CSC_KEY_PASSWORD = "***"
+npm run build:win
+node scripts/sign.js dist\clipvault-*-setup.exe dist\win-unpacked\ClipVault.exe
+```
+
+### 有 Azure Key Vault EV 时
+
+```powershell
+$env:AZURE_KEY_VAULT_URI = "https://xxx.vault.azure.net/"
+$env:AZURE_CERT_NAME = "clipvault-ev"
+$env:AZURE_CLIENT_ID = "..."
+$env:AZURE_TENANT_ID = "..."
+$env:AZURE_CLIENT_SECRET = "..."
+node scripts/sign.js dist\clipvault-*-setup.exe
+```
+
+验证：
+
+```powershell
+# 查看签名信息（有 signtool 时）
+signtool verify /pa dist\clipvault-*-setup.exe
+```
+
 ## 目录
 
 - [为什么需要代码签名](#为什么需要代码签名)
