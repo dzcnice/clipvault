@@ -39,6 +39,7 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
+    icon: join(__dirname, '../../resources/icon-v3.png'),
     frame: false, // 无边框窗口
     transparent: true, // 启用透明以配合液态玻璃效果
     hasShadow: true, // macOS 窗口阴影（Windows 下 CSS 提供）

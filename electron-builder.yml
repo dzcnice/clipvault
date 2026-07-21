@@ -2,7 +2,7 @@ appId: com.clipvault.app
 productName: ClipVault
 directories:
   buildResources: build
-icon: resources/icon-square.png
+icon: resources/icon-square-v3.png
 # 体积：Electron 运行时占大头；下列规则尽量去掉无用语言包与开发残留
 files:
   - '!**/.vscode/*'
@@ -26,7 +26,7 @@ electronLanguages:
 # v3.0 个人本地版：不再打包 Tailscale / node-datachannel / transformers
 win:
   executableName: ClipVault
-  icon: resources/icon.ico
+  icon: resources/icon-v3.ico
   target:
     - nsis
   signAndEditExecutable: false

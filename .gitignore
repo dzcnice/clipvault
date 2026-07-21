@@ -50,3 +50,7 @@ npm-debug.log*
 *.db-journal
 *.db-wal
 .ace-tool/
+
+# local icon extract temp
+tmp-icon-check/
+

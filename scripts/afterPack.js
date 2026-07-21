@@ -7,7 +7,7 @@ exports.default = async function(context) {
   }
   
   const exePath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`)
-  const iconPath = path.join(__dirname, '../resources/icon.ico')
+  const iconPath = path.join(__dirname, '../resources/icon-v3.ico')
   const rceditPath = path.join(__dirname, '../node_modules/rcedit/bin/rcedit-x64.exe')
   
   console.log('Setting icon for:', exePath)

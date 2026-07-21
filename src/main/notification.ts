@@ -23,7 +23,7 @@ export function showNotification(options: NotificationOptions): void {
     return
   }
 
-  const iconPath = join(__dirname, '../../resources/icon.png')
+  const iconPath = join(__dirname, '../../resources/icon-v3.png')
   let icon: Electron.NativeImage
 
   try {

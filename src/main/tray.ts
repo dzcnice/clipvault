@@ -15,7 +15,7 @@ export function createTray(window: BrowserWindow): Tray {
   mainWindow = window
 
   // 创建托盘图标
-  const iconPath = join(__dirname, '../../resources/icon.png')
+  const iconPath = join(__dirname, '../../resources/icon-v3.png')
   let icon: Electron.NativeImage
 
   try {

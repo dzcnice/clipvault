@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import TitleBar from '../components/TitleBar'
+import clipVaultLogo from '../assets/clipvault-logo-v3.png'
 import {
   Activity,
   ClipboardList,
@@ -96,14 +97,13 @@ export default function MainLayout(): JSX.Element {
       <div className="flex min-h-0 flex-1 gap-3 p-3 pt-1">
         <aside className="cv-panel-soft flex w-[15rem] shrink-0 flex-col overflow-hidden">
           <div className="flex items-center gap-3 border-b-2 border-[var(--line)] px-3 py-3">
-            <div
-              className="cv-icon-slot !h-10 !w-10"
-              style={{
-                background: 'var(--primary)',
-                color: 'var(--primary-foreground)'
-              }}
-            >
-              <KeyRound size={18} strokeWidth={2.5} />
+            <div className="cv-icon-slot !h-10 !w-10 !p-1" aria-hidden="true">
+              <img
+                src={clipVaultLogo}
+                alt=""
+                className="h-full w-full object-contain"
+                draggable={false}
+              />
             </div>
             <div className="min-w-0">
               <div className="font-pixel truncate text-[15px] font-bold tracking-wide text-foreground">
