@@ -1,0 +1,38 @@
+[
+  {
+    "name": "renderer-main-bundle",
+    "path": "out/renderer/assets/index-*.js",
+    "limit": "350 KB",
+    "gzip": true
+  },
+  {
+    "name": "vendor-react",
+    "path": "out/renderer/assets/vendor-react-*.js",
+    "limit": "180 KB",
+    "gzip": true
+  },
+  {
+    "name": "vendor-radix",
+    "path": "out/renderer/assets/vendor-radix-*.js",
+    "limit": "120 KB",
+    "gzip": true
+  },
+  {
+    "name": "vendor-motion",
+    "path": "out/renderer/assets/vendor-motion-*.js",
+    "limit": "120 KB",
+    "gzip": true
+  },
+  {
+    "name": "vendor-icons",
+    "path": "out/renderer/assets/vendor-icons-*.js",
+    "limit": "40 KB",
+    "gzip": true
+  },
+  {
+    "name": "vendor-crypto",
+    "path": "out/renderer/assets/vendor-crypto-*.js",
+    "limit": "80 KB",
+    "gzip": true
+  }
+]

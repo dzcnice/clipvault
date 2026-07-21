@@ -1,0 +1,2 @@
+# 集成测试 fixture 文件存放目录
+# 当前所有 fixture（KDBX/1pux/CSV）都在测试代码内动态生成，无需磁盘文件。

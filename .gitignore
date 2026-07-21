@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+dist-types/
+dist-types-web/
+*.tsbuildinfo
+
+# Playwright / local reports
+e2e-report/
+e2e-results/
+playwright-report/
+test-results/
+
+# Archives（发布包体积大，避免入库）
+dist.zip
+*.zip
+*.tar.gz
+*.7z
+
+# 测试覆盖率
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# SQLite databases (keep for dev, ignore prod)
+*.db
+*.db-journal
+*.db-wal
+.ace-tool/

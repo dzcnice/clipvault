@@ -1,0 +1,356 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================
+   ClipVault · 像素壳 + 清晰正文
+   ======================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+html,
+body,
+#root {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(43, 36, 56, 0.15);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(43, 36, 56, 0.28);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--ink);
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@layer components {
+  .cv-app-shell {
+    @apply flex h-full flex-col;
+  }
+
+  .cv-panel {
+    background: var(--surface);
+    border: var(--px-border-strong) solid var(--line);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  .cv-panel-soft {
+    background: var(--surface);
+    border: var(--px-border-strong) solid var(--line);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  .cv-page {
+    @apply h-full overflow-y-auto;
+  }
+
+  .cv-page-inner {
+    @apply mx-auto max-w-6xl px-6 py-6;
+  }
+
+  /* 标题：像素 */
+  .cv-page-title {
+    font-family: var(--font-pixel);
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  /* 描述：清晰正文 */
+  .cv-page-desc {
+    margin-top: 0.35rem;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+
+  .cv-kicker {
+    font-family: var(--font-pixel);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary);
+  }
+
+  .cv-btn {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold;
+    font-family: var(--font-pixel);
+    border: var(--px-border) solid var(--line);
+    transition:
+      transform var(--duration-fast) var(--ease-out),
+      background var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
+    cursor: pointer;
+  }
+  .cv-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: none !important;
+  }
+
+  .cv-btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: var(--px-shadow-sm);
+  }
+  .cv-btn-primary:hover {
+    background: var(--primary-hover);
+    color: #fffdf8;
+  }
+  .cv-btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .cv-btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: none;
+  }
+  .cv-btn-secondary:hover {
+    background: var(--surface-hover);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  .cv-btn-ghost {
+    background: transparent;
+    color: var(--ink-soft);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .cv-btn-ghost:hover {
+    background: var(--surface-2);
+    border-color: var(--line-soft);
+    color: var(--ink);
+  }
+
+  .cv-btn-danger {
+    background: rgba(196, 69, 54, 0.1);
+    color: var(--destructive);
+    border-color: var(--line);
+    box-shadow: none;
+  }
+  .cv-btn-danger:hover {
+    background: rgba(196, 69, 54, 0.16);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  .cv-input {
+    @apply w-full px-3 py-2.5 text-sm outline-none;
+    font-family: var(--font-body);
+    background: var(--input);
+    border: var(--px-border) solid var(--line);
+    color: var(--ink);
+  }
+  .cv-input::placeholder {
+    color: var(--ink-faint);
+  }
+  .cv-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+  }
+
+  .cv-sidebar-item {
+    @apply flex items-center gap-2.5 px-2.5 py-2 text-sm font-semibold;
+    font-family: var(--font-pixel);
+    color: var(--ink-soft);
+    border: var(--px-border) solid transparent;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .cv-sidebar-item:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .cv-sidebar-item-active {
+    background: var(--primary-soft);
+    color: var(--ink);
+    border-color: var(--line);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  /* 列表行：正文清晰；默认无硬阴影 */
+  .cv-list-row {
+    @apply flex items-center gap-3 px-3 py-2.5 cursor-pointer;
+    font-family: var(--font-body);
+    border: var(--px-border) solid transparent;
+    background: transparent;
+    transition:
+      background var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
+  }
+  .cv-list-row:hover {
+    background: var(--surface-2);
+    border-color: var(--line-soft);
+  }
+  .cv-list-row-active {
+    background: var(--primary-soft);
+    border-color: var(--line);
+    box-shadow: var(--px-shadow-sm);
+  }
+
+  .cv-empty {
+    @apply flex flex-col items-center justify-center gap-3 py-16 text-center;
+    color: var(--ink-soft);
+  }
+
+  .cv-badge {
+    @apply inline-flex items-center px-2 py-0.5 text-[11px] font-medium;
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    border: 1px solid var(--line-soft);
+  }
+
+  .cv-badge-accent {
+    background: var(--primary-soft);
+    color: var(--primary-hover);
+    border-color: rgba(201, 146, 10, 0.35);
+  }
+
+  .cv-divider {
+    height: 0;
+    border: none;
+    border-top: 1px dashed var(--line-soft);
+  }
+
+  .cv-icon-slot {
+    @apply flex shrink-0 items-center justify-center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: var(--px-border) solid var(--line);
+    background: var(--surface-2);
+  }
+
+  .cv-toast-pixel {
+    font-family: var(--font-pixel);
+    border: var(--px-border-strong) solid var(--line);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: var(--px-shadow);
+    padding: 0.65rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .glass-card {
+    @apply cv-panel p-4;
+  }
+  .glass-btn {
+    @apply cv-btn cv-btn-secondary;
+  }
+  .glass-btn-primary {
+    @apply cv-btn cv-btn-primary;
+  }
+  .glass-btn-icon {
+    @apply cv-btn cv-btn-ghost p-2;
+  }
+  .glass-input {
+    @apply cv-input;
+  }
+  .sidebar-item {
+    @apply cv-sidebar-item;
+  }
+  .sidebar-item-active {
+    @apply cv-sidebar-item-active;
+  }
+  .divider {
+    @apply cv-divider;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn var(--duration-base) var(--ease-out);
+}
+.animate-scaleIn {
+  animation: fadeIn var(--duration-base) var(--ease-out);
+}
+.animate-toast {
+  animation: toastPop 160ms var(--ease-out);
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-pixel {
+  font-family: var(--font-pixel);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
