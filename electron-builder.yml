@@ -3,17 +3,26 @@ productName: ClipVault
 directories:
   buildResources: build
 icon: resources/icon-square.png
+# 体积：Electron 运行时占大头；下列规则尽量去掉无用语言包与开发残留
 files:
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.*'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!**/node_modules/*/{test,tests,__tests__,docs,doc,example,examples,demo}/**'
+  - '!**/node_modules/.bin/**'
+  - '!**/*.{map,md,markdown}'
 asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/**/*.node
   - node_modules/sharp/**/*
   - node_modules/@img/**/*
+# 仅保留中英文 Chromium 语言包（完整 locales 约 40MB+）
+electronLanguages:
+  - en-US
+  - zh-CN
 # v3.0 个人本地版：不再打包 Tailscale / node-datachannel / transformers
 win:
   executableName: ClipVault
