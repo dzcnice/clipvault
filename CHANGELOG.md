@@ -21,8 +21,9 @@
 - 密钥拦截、审计日志、恢复短语、命令面板 / HUD
 
 ### Notes
-- 安装包文件名随版本：`dist/clipvault-3.1.0-setup.exe`（需 `npm run build:win`）
-- Windows 代码签名 / macOS 公证 / GitHub Release 仍依赖外部证书与 token（见 `docs/KNOWN-LIMITATIONS.md`）
+- 安装包：`dist/clipvault-3.1.0-setup.exe`
+- GitHub Release：https://github.com/dzcnice/clipvault/releases/tag/v3.1.0
+- Windows 代码签名 / macOS 公证仍依赖外部证书（见 `docs/KNOWN-LIMITATIONS.md`）
 
 ---
 

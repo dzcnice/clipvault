@@ -7,6 +7,13 @@
 
 > v3.0 起为**单机个人版**。团队 P2P、Vera AI、CLI / HTTP / SSH、分享包等比赛向能力已下线。
 
+### 下载
+
+- **最新版 Release**：[v3.1.0](https://github.com/dzcnice/clipvault/releases/tag/v3.1.0)
+- **Windows 安装包**：[`clipvault-3.1.0-setup.exe`](https://github.com/dzcnice/clipvault/releases/download/v3.1.0/clipvault-3.1.0-setup.exe)
+
+仓库：https://github.com/dzcnice/clipvault
+
 ## 核心能力
 
 ### 剪贴板与凭证
