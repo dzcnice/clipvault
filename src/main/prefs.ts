@@ -20,11 +20,23 @@ export interface ClipVaultPrefs {
    * - 绝对路径：自定义目录（须可写）
    */
   imagesDir: string | null
+  /** 复制敏感内容后自动清空剪贴板（毫秒）；0=关闭 */
+  autoClearTtlMs: number
+  /** 从主窗口复制后隐藏到托盘（贴完即走） */
+  hideAfterCopy: boolean
+  /** 忽略短于 N 字符的剪贴板文本（0=不忽略） */
+  minClipboardLength: number
+  /** 开机自启推荐已提示过（避免反复打扰） */
+  onboardingTipsSeen: boolean
 }
 
 const DEFAULTS: ClipVaultPrefs = {
   imagePasteMode: 'both',
-  imagesDir: null
+  imagesDir: null,
+  autoClearTtlMs: 30_000,
+  hideAfterCopy: false,
+  minClipboardLength: 0,
+  onboardingTipsSeen: false
 }
 
 function prefsPath(): string {
@@ -56,13 +68,31 @@ export function normalizeImagesDir(raw: unknown): string | null {
   return abs
 }
 
+function clampTtl(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.autoClearTtlMs
+  if (raw <= 0) return 0
+  return Math.min(Math.floor(raw), 600_000)
+}
+
+function clampMinLen(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.minClipboardLength
+  return Math.max(0, Math.min(Math.floor(raw), 200))
+}
+
 function normalizePrefs(raw: unknown): ClipVaultPrefs {
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Partial<ClipVaultPrefs>
   const mode = obj.imagePasteMode
   const imagePasteMode: ImagePasteMode =
     mode === 'path' || mode === 'image' || mode === 'both' ? mode : DEFAULTS.imagePasteMode
   const imagesDir = normalizeImagesDir(obj.imagesDir)
-  return { imagePasteMode, imagesDir }
+  return {
+    imagePasteMode,
+    imagesDir,
+    autoClearTtlMs: clampTtl(obj.autoClearTtlMs),
+    hideAfterCopy: obj.hideAfterCopy === true,
+    minClipboardLength: clampMinLen(obj.minClipboardLength),
+    onboardingTipsSeen: obj.onboardingTipsSeen === true
+  }
 }
 
 export function getPrefs(): ClipVaultPrefs {

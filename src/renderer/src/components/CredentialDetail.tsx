@@ -2,7 +2,7 @@
  * 凭证详情组件 - 液态玻璃风格
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Credential } from '@/types'
 import { getCredentialTypeMeta } from '@/types'
 import CredentialTOTPSection from './CredentialTOTPSection'
@@ -52,15 +52,21 @@ interface CredentialDetailProps {
   onCopy: () => void
   onEdit: () => void
   onDelete: () => void
+  onToggleFavorite?: () => void
 }
 
 export default function CredentialDetail({
   credential,
   onCopy,
   onEdit,
-  onDelete
+  onDelete,
+  onToggleFavorite
 }: CredentialDetailProps): JSX.Element {
   const [showValue, setShowValue] = useState(false)
+
+  useEffect(() => {
+    setShowValue(false)
+  }, [credential.id])
 
   const formatDate = (timestamp: number): string => {
     return new Date(timestamp).toLocaleString('zh-CN')
@@ -96,6 +102,17 @@ export default function CredentialDetail({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {onToggleFavorite ? (
+              <button
+                type="button"
+                onClick={onToggleFavorite}
+                className="glass-btn glass-btn-secondary glass-btn-icon"
+                title={credential.isFavorite ? '取消收藏' : '收藏'}
+                style={{ color: credential.isFavorite ? 'var(--morandi-pink)' : undefined }}
+              >
+                <StarIcon filled={!!credential.isFavorite} />
+              </button>
+            ) : null}
             <button
               onClick={onCopy}
               disabled={credential.decryptError}

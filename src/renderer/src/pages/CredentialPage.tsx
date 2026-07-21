@@ -1,9 +1,9 @@
 /**
- * 凭证 · 钥匙箱
+ * 凭证 · 钥匙箱 · 收藏 / 最近
  */
 
-import { useState, useMemo } from 'react'
-import { KeyRound, Loader2, Plus } from 'lucide-react'
+import { useEffect, useState, useMemo } from 'react'
+import { KeyRound, Loader2, Plus, Star } from 'lucide-react'
 import { useCredentials } from '../hooks/useCredentials'
 import CredentialList from '../components/CredentialList'
 import CredentialDetail from '../components/CredentialDetail'
@@ -12,18 +12,27 @@ import SearchBar from '../components/SearchBar'
 import { useConfirm } from '../components/ConfirmDialog'
 import { showPixelToast } from '../components/PixelToast'
 import type { Credential, CredentialFilter, CreateCredentialInput } from '@/types'
+import { CredentialSortBy, SortDirection } from '@/types'
+
+type CredView = 'all' | 'favorites' | 'recent'
 
 export default function CredentialPage(): JSX.Element {
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [view, setView] = useState<CredView>('all')
   const [selectedCredential, setSelectedCredential] = useState<Credential | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingCredential, setEditingCredential] = useState<Credential | null>(null)
   const confirm = useConfirm()
 
   const filter: CredentialFilter | undefined = useMemo(() => {
-    if (!searchKeyword) return undefined
-    return { keyword: searchKeyword }
-  }, [searchKeyword])
+    const f: CredentialFilter = {}
+    if (searchKeyword) f.keyword = searchKeyword
+    if (view === 'favorites') f.favoritesOnly = true
+    return Object.keys(f).length ? f : undefined
+  }, [searchKeyword, view])
+
+  const sortBy =
+    view === 'recent' ? CredentialSortBy.LAST_USED : CredentialSortBy.UPDATED_AT
 
   const {
     credentials,
@@ -33,12 +42,44 @@ export default function CredentialPage(): JSX.Element {
     createCredential,
     updateCredential,
     deleteCredential,
-    copyCredential
-  } = useCredentials({ filter, workspace: 'personal' })
+    copyCredential,
+    refresh
+  } = useCredentials({
+    filter,
+    sortBy,
+    sortDir: SortDirection.DESC,
+    workspace: 'personal'
+  })
+
+  // 敏感页：凭证详情可见时尝试开启屏幕保护
+  useEffect(() => {
+    if (!selectedCredential) return
+    const api = (
+      window as unknown as {
+        api?: { sprint13?: { screenProtect?: { enable?: () => Promise<unknown>; disable?: () => Promise<unknown> } } }
+      }
+    ).api
+    void api?.sprint13?.screenProtect?.enable?.()
+    return () => {
+      void api?.sprint13?.screenProtect?.disable?.()
+    }
+  }, [selectedCredential])
 
   const handleCopy = async (credential: Credential): Promise<void> => {
     const success = await copyCredential(credential.id)
-    if (success) showPixelToast('已复制')
+    if (success) showPixelToast('已复制 · 将按设置自动清空')
+  }
+
+  const handleToggleFavorite = async (credential: Credential): Promise<void> => {
+    const next = !credential.isFavorite
+    const updated = await updateCredential({ id: credential.id, isFavorite: next })
+    if (updated) {
+      showPixelToast(next ? '已收藏' : '已取消收藏')
+      if (selectedCredential?.id === credential.id) {
+        setSelectedCredential({ ...credential, isFavorite: next })
+      }
+      await refresh()
+    }
   }
 
   const handleDelete = async (credential: Credential): Promise<void> => {
@@ -104,6 +145,32 @@ export default function CredentialPage(): JSX.Element {
               setSelectedCredential(null)
             }}
           />
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { id: 'all' as const, label: '全部' },
+                { id: 'favorites' as const, label: '收藏' },
+                { id: 'recent' as const, label: '最近' }
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`cv-btn text-[11px] !px-2 !py-1 ${
+                  view === tab.id ? 'cv-btn-primary' : 'cv-btn-ghost'
+                }`}
+                onClick={() => {
+                  setView(tab.id)
+                  setSelectedCredential(null)
+                }}
+              >
+                {tab.id === 'favorites' ? (
+                  <Star size={12} className="mr-0.5 inline" />
+                ) : null}
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -129,7 +196,13 @@ export default function CredentialPage(): JSX.Element {
               <p className="font-pixel text-sm font-bold">
                 {searchKeyword ? '没找到' : '还没有钥匙'}
               </p>
-              <p className="font-body text-xs text-muted-foreground">点「新建」收进箱子</p>
+              <p className="font-body text-xs text-muted-foreground">
+                {searchKeyword
+                  ? '换个关键词'
+                  : view === 'favorites'
+                    ? '点星标收藏常用钥匙'
+                    : '点「新建」或复制密钥时拦截入库'}
+              </p>
             </div>
           ) : (
             <CredentialList
@@ -138,6 +211,7 @@ export default function CredentialPage(): JSX.Element {
               onSelect={setSelectedCredential}
               onCopy={(c) => void handleCopy(c)}
               onDelete={(c) => void handleDelete(c)}
+              onToggleFavorite={(c) => void handleToggleFavorite(c)}
             />
           )}
         </div>
@@ -153,6 +227,7 @@ export default function CredentialPage(): JSX.Element {
               setIsFormOpen(true)
             }}
             onDelete={() => void handleDelete(selectedCredential)}
+            onToggleFavorite={() => void handleToggleFavorite(selectedCredential)}
           />
         ) : (
           <div className="cv-empty h-full">

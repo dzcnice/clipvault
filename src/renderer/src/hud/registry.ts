@@ -5,8 +5,9 @@
 import type { HudCommand, HudCommandSource } from './types'
 import { searchSource } from './commands/search'
 import { navigateSource } from './commands/navigate'
+import { mixedDataSource } from './commands/mixed-data'
 
-const sources: HudCommandSource[] = [searchSource, navigateSource]
+const sources: HudCommandSource[] = [mixedDataSource, searchSource, navigateSource]
 
 /** 汇总当前所有命令 */
 export async function loadAllCommands(): Promise<HudCommand[]> {

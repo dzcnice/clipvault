@@ -3,20 +3,24 @@
  * 安全说明 / 截图粘贴模式 / 快捷键表 / 托盘语义 / 导入导出
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import ImportExport from '../components/ImportExport'
 import ThemeToggle from '@renderer/components/ThemeToggle'
 import { BiometricToggle } from '@renderer/components/BiometricToggle'
 import { usePromptDialog } from '@renderer/components/PromptDialog'
+import { useConfirm } from '../components/ConfirmDialog'
 import { useShortcuts } from '../hooks/useShortcuts'
+import { useUpdater } from '../hooks/useUpdater'
 import { showPixelToast } from '../components/PixelToast'
 import {
   Download,
   FolderOpen,
+  HardDrive,
   KeyRound,
   Keyboard,
+  RefreshCw,
   RotateCcw,
   ScrollText,
   Shield
@@ -83,21 +87,53 @@ function Section({
   )
 }
 
+interface BackupRow {
+  name: string
+  path: string
+  size: number
+  date: string
+}
+
 export default function SettingsPage(): JSX.Element {
   const { t } = useTranslation(['settings', 'common'])
   const navigate = useNavigate()
   const promptDialog = usePromptDialog()
+  const confirm = useConfirm()
   const { records, loading: shortcutsLoading } = useShortcuts()
+  const {
+    status: updateStatus,
+    info: updateInfo,
+    check: checkUpdate,
+    channel: updateChannel,
+    setChannel: setUpdateChannel
+  } = useUpdater()
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [loading, setLoading] = useState(true)
   const [imageMode, setImageMode] = useState<ImagePasteMode>('both')
   const [imagesDirCustom, setImagesDirCustom] = useState<string | null>(null)
   const [resolvedImagesDir, setResolvedImagesDir] = useState('')
   const [defaultImagesDir, setDefaultImagesDir] = useState('')
+  const [autoClearSec, setAutoClearSec] = useState(30)
+  const [hideAfterCopy, setHideAfterCopy] = useState(false)
+  const [backups, setBackups] = useState<BackupRow[]>([])
+  const [backupBusy, setBackupBusy] = useState(false)
+
+  const refreshBackups = useCallback(async () => {
+    try {
+      const res = await window.api.backup?.list?.()
+      if (res?.success && Array.isArray(res.data)) {
+        setBackups(res.data as BackupRow[])
+      }
+    } catch {
+      /* optional */
+    }
+  }, [])
 
   const applyPrefsData = (data: {
     imagePasteMode?: ImagePasteMode
     imagesDir?: string | null
+    autoClearTtlMs?: number
+    hideAfterCopy?: boolean
     resolvedImagesDir?: string
     defaultImagesDir?: string
   }): void => {
@@ -105,6 +141,10 @@ export default function SettingsPage(): JSX.Element {
     if ('imagesDir' in data) setImagesDirCustom(data.imagesDir ?? null)
     if (data.resolvedImagesDir) setResolvedImagesDir(data.resolvedImagesDir)
     if (data.defaultImagesDir) setDefaultImagesDir(data.defaultImagesDir)
+    if (typeof data.autoClearTtlMs === 'number') {
+      setAutoClearSec(Math.round(data.autoClearTtlMs / 1000))
+    }
+    if (typeof data.hideAfterCopy === 'boolean') setHideAfterCopy(data.hideAfterCopy)
   }
 
   useEffect(() => {
@@ -119,7 +159,73 @@ export default function SettingsPage(): JSX.Element {
     void window.api.prefs?.get?.().then((res) => {
       if (res.success && res.data) applyPrefsData(res.data)
     })
-  }, [])
+    void refreshBackups()
+  }, [refreshBackups])
+
+  const handleAutoClearChange = async (sec: number): Promise<void> => {
+    const s = Math.max(0, Math.min(sec, 600))
+    setAutoClearSec(s)
+    try {
+      const res = await window.api.prefs.set({ autoClearTtlMs: s * 1000 })
+      if (res.success) {
+        showPixelToast(s === 0 ? '已关闭自动清空' : `复制后 ${s} 秒清空剪贴板`)
+      }
+    } catch {
+      showPixelToast('保存失败')
+    }
+  }
+
+  const handleHideAfterCopyChange = async (on: boolean): Promise<void> => {
+    setHideAfterCopy(on)
+    try {
+      await window.api.prefs.set({ hideAfterCopy: on })
+      showPixelToast(on ? '复制后隐藏主窗口' : '复制后保持窗口')
+    } catch {
+      showPixelToast('保存失败')
+    }
+  }
+
+  const handleCreateBackup = async (): Promise<void> => {
+    setBackupBusy(true)
+    try {
+      const res = await window.api.backup.create()
+      if (res.success) {
+        showPixelToast('备份已创建')
+        await refreshBackups()
+      } else {
+        showPixelToast(res.error || '备份失败')
+      }
+    } catch {
+      showPixelToast('备份失败')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  const handleRestoreBackup = async (b: BackupRow): Promise<void> => {
+    const ok = await confirm({
+      title: '从备份恢复',
+      message: `将用「${b.name}」覆盖当前数据库。恢复前会再备份当前库一次。应用可能需要重新打开保险库。`,
+      confirmText: '恢复',
+      cancelText: '取消',
+      variant: 'danger'
+    })
+    if (!ok) return
+    setBackupBusy(true)
+    try {
+      const res = await window.api.backup.restore(b.path)
+      if (res.success) {
+        showPixelToast('已恢复备份，请重新加载')
+        setTimeout(() => location.reload(), 800)
+      } else {
+        showPixelToast(res.error || '恢复失败')
+      }
+    } catch {
+      showPixelToast('恢复失败')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
 
   const handleAutoLaunchChange = async (enabled: boolean): Promise<void> => {
     try {
@@ -470,32 +576,163 @@ export default function SettingsPage(): JSX.Element {
             </div>
           </Section>
 
-          <Section title="通用">
-            <label className="flex cursor-pointer items-center justify-between gap-4">
-              <div>
-                <div className="text-sm font-medium text-foreground">开机自启</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  登录系统后后台启动（默认关闭，由你决定）
-                </p>
+          <Section
+            title="推荐默认 · 效率"
+            description="个人版推荐配置，可随时改回。"
+          >
+            <div className="space-y-4">
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium text-foreground">开机自启</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    登录后后台监听剪贴板（推荐开启）
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={autoLaunch}
+                  disabled={loading}
+                  onChange={(e) => void handleAutoLaunchChange(e.target.checked)}
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium text-foreground">复制后隐藏主窗口</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    从列表复制后最小化，方便贴回其他应用
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={hideAfterCopy}
+                  onChange={(e) => void handleHideAfterCopyChange(e.target.checked)}
+                />
+              </label>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium text-foreground">敏感复制自动清空</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    复制凭证后 N 秒清空系统剪贴板（0=关闭，推荐 30）
+                  </p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={600}
+                  className="cv-input w-20 text-center font-mono text-sm"
+                  value={autoClearSec}
+                  onChange={(e) => void handleAutoClearChange(Number(e.target.value) || 0)}
+                />
               </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-[var(--primary)]"
-                checked={autoLaunch}
-                disabled={loading}
-                onChange={(e) => void handleAutoLaunchChange(e.target.checked)}
-              />
-            </label>
+            </div>
           </Section>
 
-          <Section title="数据" description="导入导出与本地备份">
+          <Section
+            title="本地备份"
+            description="数据库副本保存在本机 userData/backups。恢复前会先备份当前库。"
+          >
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="cv-btn cv-btn-primary text-xs"
+                disabled={backupBusy}
+                onClick={() => void handleCreateBackup()}
+              >
+                <HardDrive size={14} />
+                {backupBusy ? '处理中…' : '立即备份'}
+              </button>
+              <button
+                type="button"
+                className="cv-btn cv-btn-secondary text-xs"
+                onClick={() => void refreshBackups()}
+              >
+                <RefreshCw size={14} />
+                刷新列表
+              </button>
+              <button
+                type="button"
+                className="cv-btn cv-btn-ghost text-xs"
+                onClick={() => navigate('/recovery')}
+              >
+                <KeyRound size={14} />
+                恢复短语
+              </button>
+            </div>
+            {backups.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                还没有备份。建议设置恢复短语后点一次「立即备份」。
+              </p>
+            ) : (
+              <ul className="max-h-48 space-y-2 overflow-y-auto">
+                {backups.slice(0, 8).map((b) => (
+                  <li
+                    key={b.path}
+                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
+                    style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-foreground">{b.name}</div>
+                      <div className="text-muted-foreground">
+                        {new Date(b.date).toLocaleString()} ·{' '}
+                        {(b.size / 1024).toFixed(0)} KB
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="cv-btn cv-btn-secondary !px-2 !py-1 shrink-0"
+                      disabled={backupBusy}
+                      onClick={() => void handleRestoreBackup(b)}
+                    >
+                      恢复
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section title="数据" description="导入导出（JSON 默认推荐加密）">
             <ImportExport onExport={handleExport} onImport={handleImport} />
+          </Section>
+
+          <Section title="检查更新" description="从 GitHub Releases 拉取更新元数据。">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="cv-btn cv-btn-secondary text-xs"
+                onClick={() => {
+                  void checkUpdate()
+                  showPixelToast('正在检查更新…')
+                }}
+              >
+                <RefreshCw size={14} />
+                检查更新
+              </button>
+              <select
+                className="cv-input w-auto text-xs"
+                value={updateChannel || 'stable'}
+                onChange={(e) => {
+                  const ch = e.target.value as 'stable' | 'beta'
+                  void setUpdateChannel?.(ch)
+                  showPixelToast(ch === 'beta' ? '已切 beta 通道' : '已切 stable 通道')
+                }}
+              >
+                <option value="stable">stable</option>
+                <option value="beta">beta</option>
+              </select>
+              <span className="text-xs text-muted-foreground">
+                状态：{updateStatus}
+                {updateInfo?.version ? ` · 可用 ${updateInfo.version}` : ''}
+              </span>
+            </div>
           </Section>
 
           <Section title="关于">
             <p className="text-sm leading-relaxed text-muted-foreground">
               ClipVault v3 是本地优先的个人凭证与剪贴板工作台。数据加密存于本机，
-              无团队同步、无云端、无主密码门槛。
+              无团队同步、无云端、无主密码门槛。下载与更新见 GitHub Releases。
             </p>
           </Section>
         </div>

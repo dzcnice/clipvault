@@ -60,7 +60,15 @@ function suggestCredentialName(detectedType?: string, content?: string): string 
     else if (c.includes('BEGIN') && c.includes('PRIVATE KEY')) label = 'SSH'
   }
 
-  return `${label} · ${stamp}`
+  // 内容片段作后缀，避免同天多条重名
+  let hint = ''
+  if (content) {
+    const c = content.trim().replace(/\s+/g, '')
+    if (c.length >= 8) {
+      hint = ` · ${c.slice(0, 4)}…${c.slice(-3)}`
+    }
+  }
+  return `${label} · ${stamp}${hint}`
 }
 
 function InterceptForm(props: {

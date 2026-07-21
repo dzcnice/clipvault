@@ -430,12 +430,18 @@ const api = {
         imagesDir: string | null
         resolvedImagesDir: string
         defaultImagesDir: string
+        autoClearTtlMs?: number
+        hideAfterCopy?: boolean
+        minClipboardLength?: number
       }>
     > => ipcRenderer.invoke(IPC_CHANNELS.PREFS_GET),
     set: (
       partial: Partial<{
         imagePasteMode: 'both' | 'path' | 'image'
         imagesDir: string | null
+        autoClearTtlMs?: number
+        hideAfterCopy?: boolean
+        minClipboardLength?: number
       }>
     ): Promise<
       ApiResponse<{
@@ -443,6 +449,9 @@ const api = {
         imagesDir: string | null
         resolvedImagesDir: string
         defaultImagesDir: string
+        autoClearTtlMs?: number
+        hideAfterCopy?: boolean
+        minClipboardLength?: number
       }>
     > => ipcRenderer.invoke(IPC_CHANNELS.PREFS_SET, partial),
     /** 系统对话框选择截图存储目录 */
@@ -452,6 +461,8 @@ const api = {
         imagesDir: string | null
         resolvedImagesDir: string
         defaultImagesDir: string
+        autoClearTtlMs?: number
+        hideAfterCopy?: boolean
       }>
     > => ipcRenderer.invoke(IPC_CHANNELS.PREFS_PICK_IMAGES_DIR),
     /** 在资源管理器打开当前图片目录 */

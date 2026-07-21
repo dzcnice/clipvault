@@ -1,5 +1,5 @@
 /**
- * 剪贴板 · 可读列表 + 图片三态复制
+ * 剪贴板 · 可读列表 + 图片三态复制 + 类型筛选
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -9,7 +9,11 @@ import ClipboardListView, { type ImageCopyMode } from '../components/ClipboardLi
 import SearchBar from '../components/SearchBar'
 import { useConfirm } from '../components/ConfirmDialog'
 import { showPixelToast } from '../components/PixelToast'
-import type { ClipboardItem, ClipboardFilter } from '@/types'
+import {
+  ClipboardContentType,
+  type ClipboardItem,
+  type ClipboardFilter
+} from '@/types'
 
 const MODE_HINT: Record<'both' | 'path' | 'image', string> = {
   both: '默认：截图后写入 图片+路径',
@@ -17,15 +21,31 @@ const MODE_HINT: Record<'both' | 'path' | 'image', string> = {
   image: '默认：截图后仅写图片'
 }
 
+type TypeFilter = 'all' | 'text' | 'image' | 'html' | 'file'
+
+const TYPE_CHIPS: Array<{ id: TypeFilter; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'text', label: '文本' },
+  { id: 'image', label: '图片' },
+  { id: 'html', label: 'HTML' },
+  { id: 'file', label: '文件' }
+]
+
 export default function ClipboardPage(): JSX.Element {
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [pinnedOnly, setPinnedOnly] = useState(false)
   const [pasteMode, setPasteMode] = useState<'both' | 'path' | 'image'>('both')
+  const [hideAfterCopy, setHideAfterCopy] = useState(false)
   const confirm = useConfirm()
 
   useEffect(() => {
     void window.api.prefs?.get?.().then((res) => {
-      if (res.success && res.data?.imagePasteMode) {
-        setPasteMode(res.data.imagePasteMode)
+      if (res.success && res.data) {
+        if (res.data.imagePasteMode) setPasteMode(res.data.imagePasteMode)
+        if (typeof res.data.hideAfterCopy === 'boolean') {
+          setHideAfterCopy(res.data.hideAfterCopy)
+        }
       }
     })
 
@@ -44,10 +64,22 @@ export default function ClipboardPage(): JSX.Element {
     }
   }, [])
 
-  const filter: ClipboardFilter | undefined = useMemo(
-    () => (searchKeyword ? { keyword: searchKeyword } : undefined),
-    [searchKeyword]
-  )
+  const filter: ClipboardFilter | undefined = useMemo(() => {
+    const f: ClipboardFilter = {}
+    if (searchKeyword) f.keyword = searchKeyword
+    if (typeFilter !== 'all') {
+      f.type =
+        typeFilter === 'text'
+          ? ClipboardContentType.TEXT
+          : typeFilter === 'image'
+            ? ClipboardContentType.IMAGE
+            : typeFilter === 'html'
+              ? ClipboardContentType.HTML
+              : ClipboardContentType.FILE
+    }
+    if (pinnedOnly) f.pinnedOnly = true
+    return Object.keys(f).length ? f : undefined
+  }, [searchKeyword, typeFilter, pinnedOnly])
 
   const {
     items,
@@ -59,7 +91,17 @@ export default function ClipboardPage(): JSX.Element {
     pinItem,
     copyItem,
     clearHistory
-  } = useClipboard({ filter, limit: 200, workspace: 'personal' })
+  } = useClipboard({ filter, limit: 300, workspace: 'personal' })
+
+  const maybeHide = async (): Promise<void> => {
+    if (!hideAfterCopy) return
+    try {
+      // 与托盘语义一致：最小化/隐藏主窗口
+      await window.api.window?.minimize?.()
+    } catch {
+      /* optional */
+    }
+  }
 
   const handleCopy = async (item: ClipboardItem): Promise<void> => {
     await copyItem(item.id)
@@ -74,6 +116,7 @@ export default function ClipboardPage(): JSX.Element {
     } else {
       showPixelToast('已复制')
     }
+    await maybeHide()
   }
 
   const handleCopyImage = async (
@@ -83,13 +126,18 @@ export default function ClipboardPage(): JSX.Element {
     try {
       if (mode === 'path') {
         const res = await window.api.clipboard.copyPath(item.id)
-        if (res.success) showPixelToast('路径已复制，可贴到终端')
-        else showPixelToast(res.error || '无本地路径')
+        if (res.success) {
+          showPixelToast('路径已复制，可贴到终端')
+          await maybeHide()
+        } else {
+          showPixelToast(res.error || '无本地路径')
+        }
         return
       }
       const res = await window.api.clipboard.copyItem(item.id, { mode })
       if (res.success) {
         showPixelToast(mode === 'both' ? '图片+路径已复制' : '图片已复制')
+        await maybeHide()
       } else {
         showPixelToast(res.error || '复制失败')
       }
@@ -157,6 +205,29 @@ export default function ClipboardPage(): JSX.Element {
             {pasteMode === 'both' ? '图+路径' : pasteMode === 'path' ? '仅路径' : '仅图片'}
           </span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {TYPE_CHIPS.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`cv-btn text-[11px] !px-2 !py-1 ${
+                typeFilter === chip.id ? 'cv-btn-primary' : 'cv-btn-ghost'
+              }`}
+              onClick={() => setTypeFilter(chip.id)}
+            >
+              {chip.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`cv-btn text-[11px] !px-2 !py-1 ${
+              pinnedOnly ? 'cv-btn-primary' : 'cv-btn-ghost'
+            }`}
+            onClick={() => setPinnedOnly((v) => !v)}
+          >
+            仅置顶
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -181,9 +252,9 @@ export default function ClipboardPage(): JSX.Element {
               {searchKeyword ? '没有匹配' : '箱子是空的'}
             </p>
             <p className="font-body max-w-xs text-sm text-muted-foreground">
-              {searchKeyword
-                ? '换个关键词试试'
-                : '去任意窗口复制或截图，内容会出现在这里'}
+              {searchKeyword || typeFilter !== 'all' || pinnedOnly
+                ? '换个筛选条件试试'
+                : '去任意窗口复制文字或截图，内容会出现在这里。Alt+Space 可快速搜索粘贴。'}
             </p>
           </div>
         ) : (

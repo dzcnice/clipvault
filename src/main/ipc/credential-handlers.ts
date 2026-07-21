@@ -8,6 +8,7 @@ import { IPC_CHANNELS } from '../../types'
 import * as credentialStore from '../../db/credential-store'
 import { wrapUnlockedHandler } from './utils'
 import { clipboardAutoClear } from '../clipboard/auto-clear'
+import { getPrefs } from '../prefs'
 import { logger } from '../utils/logger'
 import type {
   CreateCredentialInput,
@@ -144,7 +145,10 @@ export function registerCredentialHandlers(): void {
         clipboard.writeText(credential.value)
         credentialStore.recordCredentialUsage(id)
         // v2.0 Sprint 13 TASK-068：30 秒后自动清空剪贴板（SHA256 校验防误清）
-        clipboardAutoClear.schedule(credential.value)
+        const ttl = getPrefs().autoClearTtlMs
+        if (ttl > 0) {
+          clipboardAutoClear.schedule(credential.value, ttl)
+        }
 
         return { success: true, data: true }
       } catch (error) {

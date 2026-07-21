@@ -14,7 +14,10 @@ interface Props {
 const GROUP_LABELS: Record<HudCommandCategory, string> = {
   search: '搜索',
   navigate: '导航',
-  action: '操作'
+  action: '操作',
+  credential: '凭证',
+  clipboard: '剪贴板',
+  snippet: '片段'
 }
 
 export function CommandList({ commands, onSelect }: Props): JSX.Element {

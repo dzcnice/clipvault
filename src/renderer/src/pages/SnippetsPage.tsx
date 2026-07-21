@@ -56,6 +56,23 @@ export default function SnippetsPage(): JSX.Element {
   }
 
   const handleCopy = async (snippet: ClipboardItem): Promise<void> => {
+    // 优先展开 {date}/{time}/{clip} 等变量后再写入剪贴板
+    try {
+      const { expandSnippetVariables } = await import('@/utils/snippet-vars')
+      let clip = ''
+      try {
+        clip = await navigator.clipboard.readText()
+      } catch {
+        clip = ''
+      }
+      const raw = snippet.content || snippet.preview || ''
+      const expanded = expandSnippetVariables(raw, { clip })
+      await navigator.clipboard.writeText(expanded)
+      logger.info('已复制片段（含变量展开）')
+      return
+    } catch {
+      /* fallback */
+    }
     const success = await copySnippet(snippet.id)
     if (success) {
       logger.info('已复制到剪贴板')
@@ -91,7 +108,7 @@ export default function SnippetsPage(): JSX.Element {
               快速片段
             </h2>
             <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              保存常用的文本片段，一键复制
+              保存常用文本；支持 {'{date}'} {'{time}'} {'{datetime}'} {'{year}'} {'{clip}'} 变量
             </p>
           </div>
           <button

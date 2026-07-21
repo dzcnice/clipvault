@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout'
 import { ClipClearToast } from './components/ClipClearToast'
+import { UpdateNotifier } from './components/UpdateNotifier'
 import { KeyInterceptDialog } from './components/KeyInterceptDialog'
 import { useKeyIntercept } from './hooks/useKeyIntercept'
 import CommandPalette, { openCommandPalette } from './components/CommandPalette'
@@ -360,6 +361,7 @@ function App(): JSX.Element {
         <EventBridge />
         <CommandPalette />
         <ClipClearToast />
+        <UpdateNotifier />
         <KeyInterceptBridge />
         <PixelToastHost />
         <Suspense fallback={<RouteFallback />}>

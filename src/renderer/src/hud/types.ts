@@ -4,7 +4,13 @@
 
 import type { LucideIcon } from 'lucide-react'
 
-export type HudCommandCategory = 'search' | 'navigate' | 'action'
+export type HudCommandCategory =
+  | 'search'
+  | 'navigate'
+  | 'action'
+  | 'credential'
+  | 'clipboard'
+  | 'snippet'
 
 export interface HudCommand {
   id: string

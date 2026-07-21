@@ -31,6 +31,7 @@ interface CredentialListProps {
   onSelect: (credential: Credential) => void
   onCopy: (credential: Credential) => void
   onDelete?: (credential: Credential) => void
+  onToggleFavorite?: (credential: Credential) => void
 }
 
 export default function CredentialList({
@@ -38,7 +39,8 @@ export default function CredentialList({
   selectedId,
   onSelect,
   onCopy,
-  onDelete
+  onDelete,
+  onToggleFavorite
 }: CredentialListProps): JSX.Element {
   const [focusIndex, setFocusIndex] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -121,6 +123,27 @@ export default function CredentialList({
                 </div>
               </div>
 
+              {onToggleFavorite ? (
+                <button
+                  type="button"
+                  className="cv-btn cv-btn-ghost !p-1.5 opacity-0 group-hover:opacity-100"
+                  title={credential.isFavorite ? '取消收藏' : '收藏'}
+                  aria-label="收藏"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleFavorite(credential)
+                  }}
+                >
+                  <Star
+                    size={13}
+                    strokeWidth={2.25}
+                    className={credential.isFavorite ? 'fill-current' : ''}
+                    style={
+                      credential.isFavorite ? { color: 'var(--primary)' } : undefined
+                    }
+                  />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="cv-btn cv-btn-ghost !p-1.5 opacity-0 group-hover:opacity-100"

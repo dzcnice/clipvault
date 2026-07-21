@@ -68,7 +68,8 @@ export default function ImportExport({
 }: ImportExportProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export')
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json')
-  const [jsonMode, setJsonMode] = useState<'plain' | 'encrypted'>('plain')
+  // 默认推荐加密导出（P1）
+  const [jsonMode, setJsonMode] = useState<'plain' | 'encrypted'>('encrypted')
   const [exportPassword, setExportPassword] = useState('')
   const [exportOptions, setExportOptions] = useState({
     includeCredentials: true,
