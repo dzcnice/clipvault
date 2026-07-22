@@ -2,6 +2,15 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.2.1] - 2026-07-22
+
+### Fixed
+- 来源应用探测：PowerShell 误用只读自动变量 `$PID`，导致 `sourceApp` 几乎始终为空
+- TOTP 列表 IPC 不再下发明文 `secret`（仅元数据；生成仍走主进程）
+- 片段全局热键：收紧 accelerator 校验，避免 `email+work` 一类误注册
+- 「复制并粘贴」：先最小化主窗再粘贴；粘贴失败时明确报错
+- 凭证复制失败（如生物识别拒绝）toast 展示真实错误文案
+
 ## [3.2.0] - 2026-07-22
 
 ### Added

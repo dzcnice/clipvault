@@ -16,8 +16,14 @@ import { getClipboardMonitor } from '../clipboard/monitor'
 const registered = new Map<string, string>() // snippetId -> accelerator
 
 function isLikelyAccelerator(s: string): boolean {
-  // 至少含 + 或功能键风格；避免把 "sig1" 当全局热键
-  return /CommandOrControl|CmdOrCtrl|Ctrl|Alt|Shift|Super|Meta|Command|\+/i.test(s)
+  // 必须含修饰键 + 主键；避免 "sig1" / "email+work" 误注册
+  const hasMod =
+    /CommandOrControl|CmdOrCtrl|Command|Control|Ctrl|Alt|Option|Shift|Super|Meta/i.test(
+      s
+    )
+  const hasPlus = s.includes('+')
+  const parts = s.split('+').map((p) => p.trim()).filter(Boolean)
+  return hasMod && hasPlus && parts.length >= 2
 }
 
 function expandAndCopy(snippetId: string): void {

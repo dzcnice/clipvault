@@ -97,8 +97,9 @@ export default function CredentialPage(): JSX.Element {
   }, [selectedCredential])
 
   const handleCopy = async (credential: Credential): Promise<void> => {
-    const success = await copyCredential(credential.id)
-    if (success) showPixelToast('已复制 · 将按设置自动清空')
+    const res = await copyCredential(credential.id)
+    if (res.ok) showPixelToast('已复制 · 将按设置自动清空')
+    else showPixelToast(res.error || '复制失败（可能需生物识别确认）')
   }
 
   const handleToggleFavorite = async (credential: Credential): Promise<void> => {

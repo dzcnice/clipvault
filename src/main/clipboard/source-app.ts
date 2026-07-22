@@ -25,10 +25,11 @@ public class CvFg {
 "@
 $hwnd = [CvFg]::GetForegroundWindow()
 if ($hwnd -eq [IntPtr]::Zero) { ''; exit 0 }
-$pid = 0
-[void][CvFg]::GetWindowThreadProcessId($hwnd, [ref]$pid)
-if ($pid -le 0) { ''; exit 0 }
-$p = Get-Process -Id $pid -ErrorAction SilentlyContinue
+# 注意：PowerShell 自动变量 $PID 只读，绝不能用 $pid 作自定义变量
+$procId = 0
+[void][CvFg]::GetWindowThreadProcessId($hwnd, [ref]$procId)
+if ($procId -le 0) { ''; exit 0 }
+$p = Get-Process -Id $procId -ErrorAction SilentlyContinue
 if ($null -eq $p) { ''; exit 0 }
 $p.ProcessName
 `.trim()

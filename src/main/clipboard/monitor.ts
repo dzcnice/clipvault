@@ -207,12 +207,12 @@ export class ClipboardMonitor extends EventEmitter {
     // v2.0 Sprint 13 TASK-068：新剪贴板内容到来时取消旧的 auto-clear 计时（已无意义）
     clipboardAutoClear.cancel()
 
-    // 来源应用 + 排除列表
-    const sourceApp = getForegroundAppName() || this.lastSourceApp
-    this.lastSourceApp = sourceApp
+    // 来源应用 + 排除列表（同步缓存；后台刷新供下次使用）
     void refreshForegroundAppName().then((n) => {
       if (n) this.lastSourceApp = n
     })
+    const sourceApp = getForegroundAppName() || this.lastSourceApp
+    if (sourceApp) this.lastSourceApp = sourceApp
     if (isAppExcluded(sourceApp, this.excludedApps)) {
       logger.info(`[ClipboardMonitor] skipped excluded app: ${sourceApp}`)
       return

@@ -194,10 +194,24 @@ export default function CredentialDetail({
               title="复制密钥并粘贴到前台窗口（Windows）"
               disabled={credential.decryptError}
               onClick={() => {
-                void window.api.credential.copy(credential.id, {
-                  field: 'value',
-                  thenPaste: true
-                })
+                void (async () => {
+                  try {
+                    // 先藏主窗，再粘贴到真正前台应用
+                    await window.api.window?.minimize?.()
+                    await new Promise((r) => setTimeout(r, 120))
+                    const res = await window.api.credential.copy(credential.id, {
+                      field: 'value',
+                      thenPaste: true
+                    })
+                    if (!res.success) {
+                      // 动态 import 避免环依赖；失败仅 toast
+                      const { showPixelToast } = await import('./PixelToast')
+                      showPixelToast(res.error || '操作失败')
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                })()
               }}
             >
               复制并粘贴

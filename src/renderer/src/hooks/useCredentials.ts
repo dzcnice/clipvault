@@ -36,7 +36,7 @@ interface UseCredentialsReturn {
   createCredential: (input: CreateCredentialInput) => Promise<Credential | null>
   updateCredential: (input: UpdateCredentialInput) => Promise<Credential | null>
   deleteCredential: (id: string) => Promise<boolean>
-  copyCredential: (id: string) => Promise<boolean>
+  copyCredential: (id: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 export function useCredentials(options: UseCredentialsOptions = {}): UseCredentialsReturn {
@@ -141,19 +141,24 @@ export function useCredentials(options: UseCredentialsOptions = {}): UseCredenti
     [refresh]
   )
 
-  const copyCredential = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      const response = await window.api.credential.copy(id)
-      if (response.success) {
-        return true
+  const copyCredential = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const response = await window.api.credential.copy(id)
+        if (response.success) {
+          return { ok: true }
+        }
+        const msg = response.error || '复制失败'
+        setError(msg)
+        return { ok: false, error: msg }
+      } catch (err) {
+        const msg = (err as Error).message
+        setError(msg)
+        return { ok: false, error: msg }
       }
-      setError(response.error || '复制失败')
-      return false
-    } catch (err) {
-      setError((err as Error).message)
-      return false
-    }
-  }, [])
+    },
+    []
+  )
 
   return {
     credentials,

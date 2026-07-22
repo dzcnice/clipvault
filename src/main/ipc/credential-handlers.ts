@@ -208,10 +208,16 @@ export function registerCredentialHandlers(): void {
             if (ttl > 0) clipboardAutoClear.schedule(text, ttl)
           }
           if (opts?.thenPaste) {
+            // 给前台应用一点时间；调用方应先 hide 主窗
+            await new Promise((r) => setTimeout(r, 150))
             const { pasteToActiveApp } = await import('../clipboard/paste-active')
             const r = await pasteToActiveApp()
             if (!r.ok) {
-              return { success: true, data: true, error: r.error }
+              // 复制已成功，粘贴失败用明确错误码便于 UI 提示
+              return {
+                success: false,
+                error: `已复制，但粘贴失败：${r.error || '未知错误'}`
+              }
             }
           }
           return { success: true, data: true }
