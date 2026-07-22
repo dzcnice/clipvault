@@ -878,7 +878,9 @@ export default function SettingsPage(): JSX.Element {
               <label className="flex cursor-pointer items-center justify-between gap-4">
                 <div>
                   <div className="text-sm">复制凭证需生物识别</div>
-                  <p className="text-xs text-muted-foreground">须先在上方注册 Hello / 触控 ID</p>
+                  <p className="text-xs text-muted-foreground">
+                    须先注册。macOS 为 Touch ID；Windows 校验当前用户安全存储中的注册凭证（无二次弹窗）。
+                  </p>
                 </div>
                 <input
                   type="checkbox"

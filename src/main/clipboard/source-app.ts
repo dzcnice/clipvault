@@ -74,12 +74,22 @@ export async function refreshForegroundAppName(): Promise<string> {
   return name
 }
 
-/** 判断应用名是否在排除列表（不区分大小写，支持不含 .exe） */
+/**
+ * 判断应用名是否在排除列表。
+ * 规则（严格）：去 .exe 后 **全等**，或排除项以 `*` 结尾时前缀匹配（如 `Code*`）。
+ * 禁止双向 includes，避免排除 `a` / `code` 误伤大量进程。
+ */
 export function isAppExcluded(appName: string | undefined, excluded: string[]): boolean {
   if (!appName || !excluded.length) return false
   const n = appName.toLowerCase().replace(/\.exe$/i, '')
+  if (!n) return false
   return excluded.some((raw) => {
     const e = raw.trim().toLowerCase().replace(/\.exe$/i, '')
-    return e.length > 0 && (n === e || n.includes(e) || e.includes(n))
+    if (!e) return false
+    if (e.endsWith('*')) {
+      const prefix = e.slice(0, -1)
+      return prefix.length > 0 && n.startsWith(prefix)
+    }
+    return n === e
   })
 }

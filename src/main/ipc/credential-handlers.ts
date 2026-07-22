@@ -162,6 +162,12 @@ export function registerCredentialHandlers(): void {
           if (!credential) {
             return { success: false, error: '凭证不存在' }
           }
+          if (credential.decryptError) {
+            return {
+              success: false,
+              error: credential.decryptErrorMessage || '凭证已损坏，无法复制'
+            }
+          }
 
           const field = opts?.field ?? 'value'
           const delayMs = Math.max(200, Math.min(opts?.delayMs ?? 800, 5000))
@@ -171,8 +177,12 @@ export function registerCredentialHandlers(): void {
             if (!user) {
               return { success: false, error: '该凭证没有用户名' }
             }
+            if (!credential.value) {
+              return { success: false, error: '凭证值为空' }
+            }
             clipboard.writeText(user)
             if (opts?.thenPaste) {
+              await new Promise((r) => setTimeout(r, 150))
               const { pasteToActiveApp } = await import('../clipboard/paste-active')
               await pasteToActiveApp()
             }
@@ -182,8 +192,15 @@ export function registerCredentialHandlers(): void {
             const ttl = getPrefs().autoClearTtlMs
             if (ttl > 0) clipboardAutoClear.schedule(credential.value, ttl)
             if (opts?.thenPaste) {
+              await new Promise((r) => setTimeout(r, 150))
               const { pasteToActiveApp } = await import('../clipboard/paste-active')
-              await pasteToActiveApp()
+              const r = await pasteToActiveApp()
+              if (!r.ok) {
+                return {
+                  success: false,
+                  error: `已复制密码，但粘贴失败：${r.error || '未知错误'}`
+                }
+              }
             }
             return { success: true, data: true }
           }
@@ -197,8 +214,17 @@ export function registerCredentialHandlers(): void {
             const { generateFromConfig } = await import('../totp/generator')
             const cfg = getTOTP(id)
             if (!cfg?.secret) return { success: false, error: '该凭证没有 TOTP' }
-            const gen = generateFromConfig(cfg)
-            text = gen.code
+            try {
+              const gen = generateFromConfig(cfg)
+              text = gen.code
+            } catch (err) {
+              return {
+                success: false,
+                error: `TOTP 生成失败：${(err as Error).message}`
+              }
+            }
+          } else if (!text) {
+            return { success: false, error: '凭证值为空' }
           }
 
           clipboard.writeText(text)
