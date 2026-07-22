@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [3.2.1] - 2026-07-22
+## [3.2.2] - 2026-07-22
 
 ### Fixed
 - 来源应用探测：PowerShell 误用只读自动变量 `$PID`，导致 `sourceApp` 几乎始终为空
@@ -14,6 +14,11 @@
 - 损坏凭证（decryptError）禁止复制空串
 - 排除应用匹配改为全等 / `前缀*`，禁止 includes 误伤
 - TOTP 生成异常 try/catch；序列复制粘贴失败有明确错误
+
+## [3.2.1] - 2026-07-22
+
+### Notes
+- 中间修复标签；完整修复集合见 3.2.2
 
 ## [3.2.0] - 2026-07-22
 
