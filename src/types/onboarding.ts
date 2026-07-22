@@ -1,9 +1,9 @@
 /**
- * Onboarding · v3.1 无密码个人版
- * 欢迎 → 快捷键 → 导入
+ * Onboarding · v3.2 无密码个人版
+ * 欢迎 → 快捷键 → 恢复短语（可选） → 导入
  */
 
-export type OnboardingStepId = 'welcome' | 'shortcut' | 'import'
+export type OnboardingStepId = 'welcome' | 'shortcut' | 'recovery' | 'import'
 
 export interface OnboardingStepMeta {
   id: OnboardingStepId
@@ -26,9 +26,15 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
     skippable: true
   },
   {
+    id: 'recovery',
+    title: '灾难恢复短语（可选）',
+    description: '24 词离线保管。不是日常登录，仅在换机/丢库时用。',
+    skippable: true
+  },
+  {
     id: 'import',
     title: '导入凭证（可选）',
-    description: '从 1Password / Bitwarden / Chrome / LastPass / KeePass 导入。',
+    description: '从 1Password / Bitwarden / Chrome / LastPass / KeePass / 通用 CSV 导入。',
     skippable: true
   }
 ]

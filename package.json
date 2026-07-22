@@ -1,6 +1,6 @@
 {
   "name": "clipvault",
-  "version": "3.1.2",
+  "version": "3.2.0",
   "description": "本地优先的个人凭证与剪贴板工作台",
   "main": "./out/main/index.js",
   "author": "ClipVault",

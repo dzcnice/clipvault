@@ -132,30 +132,95 @@ export function registerCredentialHandlers(): void {
     )
   )
 
-  // 复制凭证值到剪贴板
+  /**
+   * 复制凭证到剪贴板（目标形态）
+   * opts.field: value | username | totp
+   * opts.thenPaste: 复制后粘贴到前台应用（Windows）
+   * opts.sequence: username_then_value — 先用户名，delayMs 后再密码
+   */
   ipcMain.handle(
     IPC_CHANNELS.CREDENTIAL_COPY,
-    wrapUnlockedHandler(async (_event, id: string): Promise<ApiResponse<boolean>> => {
-      try {
-        const credential = credentialStore.getCredentialById(id)
-        if (!credential) {
-          return { success: false, error: '凭证不存在' }
+    wrapUnlockedHandler(
+      async (
+        _event,
+        id: string,
+        opts?: {
+          field?: 'value' | 'username' | 'totp'
+          thenPaste?: boolean
+          sequence?: 'username_then_value'
+          delayMs?: number
         }
+      ): Promise<ApiResponse<boolean>> => {
+        try {
+          const { confirmSensitiveAction } = await import('../biometric/confirm')
+          const bio = await confirmSensitiveAction('copy', 'ClipVault：确认复制敏感凭证')
+          if (!bio.ok) {
+            return { success: false, error: bio.error || '生物识别未通过' }
+          }
 
-        clipboard.writeText(credential.value)
-        credentialStore.recordCredentialUsage(id)
-        // v2.0 Sprint 13 TASK-068：30 秒后自动清空剪贴板（SHA256 校验防误清）
-        const ttl = getPrefs().autoClearTtlMs
-        if (ttl > 0) {
-          clipboardAutoClear.schedule(credential.value, ttl)
+          const credential = credentialStore.getCredentialById(id)
+          if (!credential) {
+            return { success: false, error: '凭证不存在' }
+          }
+
+          const field = opts?.field ?? 'value'
+          const delayMs = Math.max(200, Math.min(opts?.delayMs ?? 800, 5000))
+
+          if (opts?.sequence === 'username_then_value') {
+            const user = credential.metadata?.username || ''
+            if (!user) {
+              return { success: false, error: '该凭证没有用户名' }
+            }
+            clipboard.writeText(user)
+            if (opts?.thenPaste) {
+              const { pasteToActiveApp } = await import('../clipboard/paste-active')
+              await pasteToActiveApp()
+            }
+            await new Promise((r) => setTimeout(r, delayMs))
+            clipboard.writeText(credential.value)
+            credentialStore.recordCredentialUsage(id)
+            const ttl = getPrefs().autoClearTtlMs
+            if (ttl > 0) clipboardAutoClear.schedule(credential.value, ttl)
+            if (opts?.thenPaste) {
+              const { pasteToActiveApp } = await import('../clipboard/paste-active')
+              await pasteToActiveApp()
+            }
+            return { success: true, data: true }
+          }
+
+          let text = credential.value
+          if (field === 'username') {
+            text = credential.metadata?.username || ''
+            if (!text) return { success: false, error: '该凭证没有用户名' }
+          } else if (field === 'totp') {
+            const { getTOTP } = await import('../../db/credential-totp-store')
+            const { generateFromConfig } = await import('../totp/generator')
+            const cfg = getTOTP(id)
+            if (!cfg?.secret) return { success: false, error: '该凭证没有 TOTP' }
+            const gen = generateFromConfig(cfg)
+            text = gen.code
+          }
+
+          clipboard.writeText(text)
+          credentialStore.recordCredentialUsage(id)
+          if (field === 'value' || field === 'totp') {
+            const ttl = getPrefs().autoClearTtlMs
+            if (ttl > 0) clipboardAutoClear.schedule(text, ttl)
+          }
+          if (opts?.thenPaste) {
+            const { pasteToActiveApp } = await import('../clipboard/paste-active')
+            const r = await pasteToActiveApp()
+            if (!r.ok) {
+              return { success: true, data: true, error: r.error }
+            }
+          }
+          return { success: true, data: true }
+        } catch (error) {
+          logger.error('[IPC] Error copying credential:', error)
+          return { success: false, error: (error as Error).message }
         }
-
-        return { success: true, data: true }
-      } catch (error) {
-        logger.error('[IPC] Error copying credential:', error)
-        return { success: false, error: (error as Error).message }
       }
-    })
+    )
   )
 
   logger.info('[IPC] Credential handlers registered')

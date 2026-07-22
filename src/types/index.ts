@@ -30,6 +30,9 @@ export const IPC_CHANNELS = {
   CLIPBOARD_GET_HISTORY: 'clipboard:getHistory',
   CLIPBOARD_CLEAR_HISTORY: 'clipboard:clearHistory',
   CLIPBOARD_DELETE_ITEM: 'clipboard:deleteItem',
+  CLIPBOARD_DELETE_ITEMS: 'clipboard:deleteItems',
+  CLIPBOARD_DELETE_OLDER: 'clipboard:deleteOlder',
+  CLIPBOARD_BATCH_PIN: 'clipboard:batchPin',
   CLIPBOARD_PIN_ITEM: 'clipboard:pinItem',
   CLIPBOARD_COPY_ITEM: 'clipboard:copyItem',
   /** 复制图片磁盘路径为文本（便于终端/CLI 粘贴） */

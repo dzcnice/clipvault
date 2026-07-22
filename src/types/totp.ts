@@ -76,6 +76,7 @@ export const SPRINT11_CHANNELS = {
   TOTP_UPSERT: 'sprint11:totp-upsert',
   TOTP_DELETE: 'sprint11:totp-delete',
   TOTP_GET: 'sprint11:totp-get',
+  TOTP_LIST: 'sprint11:totp-list',
   TOTP_GENERATE: 'sprint11:totp-generate',
   TOTP_PARSE_URI: 'sprint11:totp-parse-uri',
 

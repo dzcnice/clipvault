@@ -3,7 +3,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react'
-import { Zap, Plus, Command, Scissors, HeartPulse } from 'lucide-react'
+import { Zap, Plus, Command, Scissors, HeartPulse, Timer, Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import DashboardCard from './DashboardCard'
 import { openCommandPalette } from '../CommandPalette'
@@ -70,9 +70,21 @@ export default function QuickActionsCard(): JSX.Element {
           onClick={() => openCommandPalette()}
         />
         <ActionRow
+          icon={Timer}
+          label="TOTP 验证码"
+          onClick={() => navigate('/totp')}
+        />
+        <ActionRow
           icon={HeartPulse}
           label="健康检查"
           onClick={() => navigate('/health')}
+        />
+        <ActionRow
+          icon={Shield}
+          label="重新打开保险库"
+          onClick={() => {
+            void window.api.vault.ensureOpen().then(() => navigate('/dashboard'))
+          }}
         />
         <ActionRow
           icon={Scissors}

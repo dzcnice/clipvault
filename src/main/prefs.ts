@@ -28,6 +28,36 @@ export interface ClipVaultPrefs {
   minClipboardLength: number
   /** 开机自启推荐已提示过（避免反复打扰） */
   onboardingTipsSeen: boolean
+
+  // ── 剪贴板可控（A1–A5 / A8）──
+  /** 非置顶历史条数上限 */
+  maxHistorySize: number
+  /** 不记录的应用进程名（不含路径） */
+  excludedApps: string[]
+  /** 是否启用系统剪贴板监听 */
+  clipboardMonitorEnabled: boolean
+  /** 是否保存图片到历史 */
+  saveImages: boolean
+  /** 图片最大体积（KB），超出不入库 */
+  maxImageSizeKb: number
+  /** 是否启用密钥智能识别 */
+  enableSmartDetection: boolean
+
+  // ── 更新（C3/C4）──
+  /** 是否自动周期检查更新 */
+  autoUpdateCheck: boolean
+  /** 周期检查间隔（小时），1–24 */
+  updateCheckIntervalHours: number
+  /** 更新通道 */
+  updateChannel: 'stable' | 'beta'
+
+  // ── 安全体验（E1/E2）──
+  /** 凭证详情默认遮罩 secret */
+  maskSecretsByDefault: boolean
+  /** 复制凭证时要求生物识别确认 */
+  biometricOnCopy: boolean
+  /** 导出时要求生物识别确认 */
+  biometricOnExport: boolean
 }
 
 const DEFAULTS: ClipVaultPrefs = {
@@ -36,7 +66,19 @@ const DEFAULTS: ClipVaultPrefs = {
   autoClearTtlMs: 30_000,
   hideAfterCopy: false,
   minClipboardLength: 0,
-  onboardingTipsSeen: false
+  onboardingTipsSeen: false,
+  maxHistorySize: 500,
+  excludedApps: [],
+  clipboardMonitorEnabled: true,
+  saveImages: true,
+  maxImageSizeKb: 5120,
+  enableSmartDetection: true,
+  autoUpdateCheck: true,
+  updateCheckIntervalHours: 4,
+  updateChannel: 'stable',
+  maskSecretsByDefault: true,
+  biometricOnCopy: false,
+  biometricOnExport: false
 }
 
 function prefsPath(): string {
@@ -63,7 +105,6 @@ export function normalizeImagesDir(raw: unknown): string | null {
   if (!trimmed) return null
   const abs = isAbsolute(trimmed) ? normalize(trimmed) : null
   if (!abs) return null
-  // 拒绝把根盘当图库（过于危险/空）
   if (/^[a-zA-Z]:[\\/]?$/.test(abs) || abs === '/' || abs === '\\') return null
   return abs
 }
@@ -79,19 +120,64 @@ function clampMinLen(raw: unknown): number {
   return Math.max(0, Math.min(Math.floor(raw), 200))
 }
 
+function clampHistory(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.maxHistorySize
+  return Math.max(50, Math.min(Math.floor(raw), 5000))
+}
+
+function clampImageKb(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.maxImageSizeKb
+  return Math.max(100, Math.min(Math.floor(raw), 50_000))
+}
+
+function clampUpdateHours(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.updateCheckIntervalHours
+  return Math.max(1, Math.min(Math.floor(raw), 24))
+}
+
+function normalizeExcluded(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const x of raw) {
+    if (typeof x !== 'string') continue
+    const t = x.trim()
+    if (!t) continue
+    const key = t.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(t)
+    if (out.length >= 50) break
+  }
+  return out
+}
+
 function normalizePrefs(raw: unknown): ClipVaultPrefs {
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Partial<ClipVaultPrefs>
   const mode = obj.imagePasteMode
   const imagePasteMode: ImagePasteMode =
     mode === 'path' || mode === 'image' || mode === 'both' ? mode : DEFAULTS.imagePasteMode
   const imagesDir = normalizeImagesDir(obj.imagesDir)
+  const ch = obj.updateChannel
   return {
     imagePasteMode,
     imagesDir,
     autoClearTtlMs: clampTtl(obj.autoClearTtlMs),
     hideAfterCopy: obj.hideAfterCopy === true,
     minClipboardLength: clampMinLen(obj.minClipboardLength),
-    onboardingTipsSeen: obj.onboardingTipsSeen === true
+    onboardingTipsSeen: obj.onboardingTipsSeen === true,
+    maxHistorySize: clampHistory(obj.maxHistorySize),
+    excludedApps: normalizeExcluded(obj.excludedApps),
+    clipboardMonitorEnabled: obj.clipboardMonitorEnabled !== false,
+    saveImages: obj.saveImages !== false,
+    maxImageSizeKb: clampImageKb(obj.maxImageSizeKb),
+    enableSmartDetection: obj.enableSmartDetection !== false,
+    autoUpdateCheck: obj.autoUpdateCheck !== false,
+    updateCheckIntervalHours: clampUpdateHours(obj.updateCheckIntervalHours),
+    updateChannel: ch === 'beta' ? 'beta' : 'stable',
+    maskSecretsByDefault: obj.maskSecretsByDefault !== false,
+    biometricOnCopy: obj.biometricOnCopy === true,
+    biometricOnExport: obj.biometricOnExport === true
   }
 }
 
@@ -118,9 +204,11 @@ export function setPrefs(partial: Partial<ClipVaultPrefs>): ClipVaultPrefs {
     ...getPrefs(),
     ...partial
   }
-  // 允许显式传 null 重置 imagesDir
   if ('imagesDir' in partial) {
     merged.imagesDir = normalizeImagesDir(partial.imagesDir)
+  }
+  if ('excludedApps' in partial) {
+    merged.excludedApps = normalizeExcluded(partial.excludedApps)
   }
   const next = normalizePrefs(merged)
   cache = next
@@ -156,7 +244,6 @@ export function ensureImagesDirWritable(dir: string): {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true, mode: 0o700 })
     }
-    // 写探测文件
     const probe = join(dir, '.clipvault-write-test')
     writeFileSync(probe, 'ok', { mode: 0o600 })
     try {
@@ -174,3 +261,5 @@ export function ensureImagesDirWritable(dir: string): {
     }
   }
 }
+
+export { DEFAULTS as PREFS_DEFAULTS }

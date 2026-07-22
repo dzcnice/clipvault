@@ -99,13 +99,23 @@ export default function SettingsPage(): JSX.Element {
   const navigate = useNavigate()
   const promptDialog = usePromptDialog()
   const confirm = useConfirm()
-  const { records, loading: shortcutsLoading } = useShortcuts()
+  const {
+    records,
+    loading: shortcutsLoading,
+    setAccelerator,
+    reset: resetShortcut,
+    error: shortcutsError
+  } = useShortcuts()
+  const [editingShortcut, setEditingShortcut] = useState<string | null>(null)
+  const [shortcutDraft, setShortcutDraft] = useState('')
   const {
     status: updateStatus,
     info: updateInfo,
     check: checkUpdate,
     channel: updateChannel,
-    setChannel: setUpdateChannel
+    setChannel: setUpdateChannel,
+    getDiagnostics,
+    openReleasePage
   } = useUpdater()
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -117,6 +127,17 @@ export default function SettingsPage(): JSX.Element {
   const [hideAfterCopy, setHideAfterCopy] = useState(false)
   const [backups, setBackups] = useState<BackupRow[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
+  const [maxHistory, setMaxHistory] = useState(500)
+  const [minClipLen, setMinClipLen] = useState(0)
+  const [excludedAppsText, setExcludedAppsText] = useState('')
+  const [saveImages, setSaveImages] = useState(true)
+  const [maxImageKb, setMaxImageKb] = useState(5120)
+  const [smartDetect, setSmartDetect] = useState(true)
+  const [autoUpdateCheck, setAutoUpdateCheck] = useState(true)
+  const [updateIntervalH, setUpdateIntervalH] = useState(4)
+  const [maskSecrets, setMaskSecrets] = useState(true)
+  const [bioOnCopy, setBioOnCopy] = useState(false)
+  const [bioOnExport, setBioOnExport] = useState(false)
 
   const refreshBackups = useCallback(async () => {
     try {
@@ -136,6 +157,17 @@ export default function SettingsPage(): JSX.Element {
     hideAfterCopy?: boolean
     resolvedImagesDir?: string
     defaultImagesDir?: string
+    maxHistorySize?: number
+    minClipboardLength?: number
+    excludedApps?: string[]
+    saveImages?: boolean
+    maxImageSizeKb?: number
+    enableSmartDetection?: boolean
+    autoUpdateCheck?: boolean
+    updateCheckIntervalHours?: number
+    maskSecretsByDefault?: boolean
+    biometricOnCopy?: boolean
+    biometricOnExport?: boolean
   }): void => {
     if (data.imagePasteMode) setImageMode(data.imagePasteMode)
     if ('imagesDir' in data) setImagesDirCustom(data.imagesDir ?? null)
@@ -145,6 +177,36 @@ export default function SettingsPage(): JSX.Element {
       setAutoClearSec(Math.round(data.autoClearTtlMs / 1000))
     }
     if (typeof data.hideAfterCopy === 'boolean') setHideAfterCopy(data.hideAfterCopy)
+    if (typeof data.maxHistorySize === 'number') setMaxHistory(data.maxHistorySize)
+    if (typeof data.minClipboardLength === 'number') setMinClipLen(data.minClipboardLength)
+    if (Array.isArray(data.excludedApps)) setExcludedAppsText(data.excludedApps.join(', '))
+    if (typeof data.saveImages === 'boolean') setSaveImages(data.saveImages)
+    if (typeof data.maxImageSizeKb === 'number') setMaxImageKb(data.maxImageSizeKb)
+    if (typeof data.enableSmartDetection === 'boolean') setSmartDetect(data.enableSmartDetection)
+    if (typeof data.autoUpdateCheck === 'boolean') setAutoUpdateCheck(data.autoUpdateCheck)
+    if (typeof data.updateCheckIntervalHours === 'number') {
+      setUpdateIntervalH(data.updateCheckIntervalHours)
+    }
+    if (typeof data.maskSecretsByDefault === 'boolean') setMaskSecrets(data.maskSecretsByDefault)
+    if (typeof data.biometricOnCopy === 'boolean') setBioOnCopy(data.biometricOnCopy)
+    if (typeof data.biometricOnExport === 'boolean') setBioOnExport(data.biometricOnExport)
+  }
+
+  const saveClipPrefs = async (
+    partial: Record<string, unknown>,
+    toast?: string
+  ): Promise<void> => {
+    try {
+      const res = await window.api.prefs.set(partial as never)
+      if (res.success && res.data) {
+        applyPrefsData(res.data)
+        if (toast) showPixelToast(toast)
+      } else {
+        showPixelToast(res.error || '保存失败')
+      }
+    } catch {
+      showPixelToast('保存失败')
+    }
   }
 
   useEffect(() => {
@@ -321,8 +383,17 @@ export default function SettingsPage(): JSX.Element {
     includeCategories: boolean
     jsonMode?: 'plain' | 'encrypted'
     exportPassword?: string
+    credentialFields?: {
+      value?: boolean
+      description?: boolean
+      tags?: boolean
+      metadata?: boolean
+      timestamps?: boolean
+    }
+    credentialsSince?: number
+    clipboardSince?: number
   }): Promise<void> => {
-    await window.api.data.export(options)
+    await window.api.data.export(options as never)
   }
 
   const handleImport = async (): Promise<{
@@ -516,10 +587,16 @@ export default function SettingsPage(): JSX.Element {
             </ul>
           </Section>
 
-          <Section title="快捷键" description="全局快捷键（可在任意应用触发）">
+          <Section
+            title="快捷键"
+            description="全局快捷键。改键用 Electron 格式（CommandOrControl+Shift+F）。应用内冲突会拦截；被其它程序占用则注册失败。"
+          >
             <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
               <Keyboard size={14} />
               {shortcutsLoading ? '加载中…' : `${records.length} 条`}
+              {shortcutsError ? (
+                <span className="text-destructive">{shortcutsError}</span>
+              ) : null}
             </div>
             <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--line)' }}>
               <table className="w-full text-left text-sm">
@@ -527,51 +604,90 @@ export default function SettingsPage(): JSX.Element {
                   <tr className="text-xs text-muted-foreground">
                     <th className="px-3 py-2 font-medium">功能</th>
                     <th className="px-3 py-2 font-medium">快捷键</th>
+                    <th className="px-3 py-2 font-medium">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(records.length > 0
-                    ? records.map((r) => ({
-                        key: r.commandId,
-                        label: r.label,
-                        accelerator: r.currentAccelerator || r.defaultAccelerator
-                      }))
-                    : [
-                        {
-                          key: 'window.toggle',
-                          label: '显示/隐藏主窗口',
-                          accelerator: 'Ctrl+Space'
-                        },
-                        {
-                          key: 'search.focus',
-                          label: '聚焦搜索',
-                          accelerator: 'Ctrl+Shift+F'
-                        },
-                        {
-                          key: 'credential.new',
-                          label: '新建凭证',
-                          accelerator: 'Ctrl+Shift+N'
-                        },
-                        {
-                          key: 'clipboard.pasteRecent',
-                          label: '粘贴最近一项',
-                          accelerator: 'Ctrl+Shift+P'
-                        },
-                        {
-                          key: 'hud.toggle',
-                          label: '命令 HUD',
-                          accelerator: 'Alt+Space'
-                        }
-                      ]
-                  ).map((r) => (
-                    <tr
-                      key={r.key}
-                      className="border-t"
-                      style={{ borderColor: 'var(--line)' }}
-                    >
-                      <td className="px-3 py-2 text-foreground">{r.label}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                        {r.accelerator.replace('CommandOrControl', 'Ctrl')}
+                  {records.map((r) => (
+                    <tr key={r.commandId} className="border-t" style={{ borderColor: 'var(--line)' }}>
+                      <td className="px-3 py-2 text-foreground">
+                        {r.label}
+                        {!r.isRegistered ? (
+                          <span className="ml-1 text-[10px] text-destructive">未注册</span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {editingShortcut === r.commandId ? (
+                          <input
+                            className="cv-input w-full font-mono text-xs"
+                            value={shortcutDraft}
+                            onChange={(e) => setShortcutDraft(e.target.value)}
+                            placeholder="CommandOrControl+Shift+F"
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {(r.currentAccelerator || r.defaultAccelerator).replace(
+                              'CommandOrControl',
+                              'Ctrl'
+                            )}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {editingShortcut === r.commandId ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className="cv-btn cv-btn-primary text-[10px] !px-2 !py-0.5"
+                              onClick={() => {
+                                void setAccelerator(
+                                  r.commandId as never,
+                                  shortcutDraft
+                                ).then((ok) => {
+                                  if (ok) {
+                                    showPixelToast('已保存快捷键')
+                                    setEditingShortcut(null)
+                                  } else {
+                                    showPixelToast('冲突或无效键位')
+                                  }
+                                })
+                              }}
+                            >
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              className="cv-btn cv-btn-ghost text-[10px] !px-2 !py-0.5"
+                              onClick={() => setEditingShortcut(null)}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className="cv-btn cv-btn-ghost text-[10px] !px-2 !py-0.5"
+                              onClick={() => {
+                                setEditingShortcut(r.commandId)
+                                setShortcutDraft(r.currentAccelerator || r.defaultAccelerator)
+                              }}
+                            >
+                              改键
+                            </button>
+                            <button
+                              type="button"
+                              className="cv-btn cv-btn-ghost text-[10px] !px-2 !py-0.5"
+                              onClick={() => {
+                                void resetShortcut(r.commandId as never).then(() =>
+                                  showPixelToast('已恢复默认')
+                                )
+                              }}
+                            >
+                              默认
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -579,7 +695,7 @@ export default function SettingsPage(): JSX.Element {
               </table>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              应用内：双击列表项复制 · 命令面板可搜页面与操作
+              片段全局热键在「片段」编辑里填 CommandOrControl+Alt+数字；与此处命令键冲突时以先注册为准。
             </p>
           </Section>
 
@@ -652,9 +768,153 @@ export default function SettingsPage(): JSX.Element {
           </Section>
 
           <Section
-            title="本地备份"
-            description="数据库副本保存在本机 userData/backups。恢复前会先备份当前库。"
+            title="剪贴板可控"
+            description="历史上限、排除应用、最短文本、是否保存图片。排除应用填进程名，逗号分隔（如 Code, chrome）。"
           >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm">历史条数上限（非置顶）</div>
+                <input
+                  type="number"
+                  min={50}
+                  max={5000}
+                  className="cv-input w-24 text-center font-mono text-sm"
+                  value={maxHistory}
+                  onChange={(e) => setMaxHistory(Number(e.target.value) || 500)}
+                  onBlur={() =>
+                    void saveClipPrefs({ maxHistorySize: maxHistory }, `历史上限 ${maxHistory}`)
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm">忽略短于 N 字的文本</div>
+                <input
+                  type="number"
+                  min={0}
+                  max={200}
+                  className="cv-input w-24 text-center font-mono text-sm"
+                  value={minClipLen}
+                  onChange={(e) => setMinClipLen(Number(e.target.value) || 0)}
+                  onBlur={() =>
+                    void saveClipPrefs(
+                      { minClipboardLength: minClipLen },
+                      minClipLen ? `忽略短于 ${minClipLen} 字` : '不忽略短文本'
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-sm">排除应用（不记录）</div>
+                <input
+                  className="cv-input w-full font-mono text-xs"
+                  placeholder="Code, chrome, slack"
+                  value={excludedAppsText}
+                  onChange={(e) => setExcludedAppsText(e.target.value)}
+                  onBlur={() => {
+                    const apps = excludedAppsText
+                      .split(/[,，;；]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                    void saveClipPrefs({ excludedApps: apps }, `已排除 ${apps.length} 个应用`)
+                  }}
+                />
+              </div>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">保存图片到历史</div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={saveImages}
+                  onChange={(e) => {
+                    setSaveImages(e.target.checked)
+                    void saveClipPrefs({ saveImages: e.target.checked }, e.target.checked ? '保存图片' : '不保存图片')
+                  }}
+                />
+              </label>
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm">图片最大体积 (KB)</div>
+                <input
+                  type="number"
+                  min={100}
+                  max={50000}
+                  className="cv-input w-24 text-center font-mono text-sm"
+                  value={maxImageKb}
+                  onChange={(e) => setMaxImageKb(Number(e.target.value) || 5120)}
+                  onBlur={() =>
+                    void saveClipPrefs({ maxImageSizeKb: maxImageKb }, `图片上限 ${maxImageKb}KB`)
+                  }
+                />
+              </div>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">密钥智能识别</div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={smartDetect}
+                  onChange={(e) => {
+                    setSmartDetect(e.target.checked)
+                    void saveClipPrefs(
+                      { enableSmartDetection: e.target.checked },
+                      e.target.checked ? '已开启识别' : '已关闭识别'
+                    )
+                  }}
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">凭证详情默认遮罩 secret</div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={maskSecrets}
+                  onChange={(e) => {
+                    setMaskSecrets(e.target.checked)
+                    void saveClipPrefs(
+                      { maskSecretsByDefault: e.target.checked },
+                      e.target.checked ? '默认遮罩' : '默认显示'
+                    )
+                  }}
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm">复制凭证需生物识别</div>
+                  <p className="text-xs text-muted-foreground">须先在上方注册 Hello / 触控 ID</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={bioOnCopy}
+                  onChange={(e) => {
+                    setBioOnCopy(e.target.checked)
+                    void saveClipPrefs({ biometricOnCopy: e.target.checked })
+                  }}
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">导出需生物识别</div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={bioOnExport}
+                  onChange={(e) => {
+                    setBioOnExport(e.target.checked)
+                    void saveClipPrefs({ biometricOnExport: e.target.checked })
+                  }}
+                />
+              </label>
+            </div>
+          </Section>
+
+          <Section
+            title="本地备份"
+            description="数据库副本保存在本机 userData/backups。自动备份保留约 7 天；恢复前会先备份当前库。"
+          >
+            <p className="mb-2 text-xs text-muted-foreground">
+              自动备份：应用运行期间按日策略清理超期文件 · 当前 {backups.length} 份
+              {backups[0]
+                ? ` · 最近 ${new Date(backups[0].date).toLocaleString()}`
+                : ''}
+            </p>
             <div className="mb-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -721,8 +981,42 @@ export default function SettingsPage(): JSX.Element {
 
           <Section
             title="检查更新"
-            description="从 GitHub Releases 读取 latest.yml。检查自动进行，下载需你确认。详见 docs/release/auto-update.md。"
+            description="从 GitHub Releases 读取 latest.yml。检查可自动进行，下载需你确认。失败时可复制诊断或打开发布页。"
           >
+            <div className="mb-3 space-y-2">
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">自动检查更新</div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  checked={autoUpdateCheck}
+                  onChange={(e) => {
+                    setAutoUpdateCheck(e.target.checked)
+                    void saveClipPrefs(
+                      { autoUpdateCheck: e.target.checked },
+                      e.target.checked ? '已开自动检查' : '已关自动检查'
+                    )
+                  }}
+                />
+              </label>
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm">检查间隔（小时）</div>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  className="cv-input w-20 text-center font-mono text-sm"
+                  value={updateIntervalH}
+                  onChange={(e) => setUpdateIntervalH(Number(e.target.value) || 4)}
+                  onBlur={() =>
+                    void saveClipPrefs(
+                      { updateCheckIntervalHours: updateIntervalH },
+                      `间隔 ${updateIntervalH}h`
+                    )
+                  }
+                />
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -748,17 +1042,46 @@ export default function SettingsPage(): JSX.Element {
                 onChange={(e) => {
                   const ch = e.target.value as 'stable' | 'beta'
                   void setUpdateChannel?.(ch)
+                  void saveClipPrefs({ updateChannel: ch })
                   showPixelToast(ch === 'beta' ? '已切 beta 通道' : '已切 stable 通道')
                 }}
               >
                 <option value="stable">stable</option>
                 <option value="beta">beta</option>
               </select>
+              <button
+                type="button"
+                className="cv-btn cv-btn-ghost text-xs"
+                onClick={() => void openReleasePage()}
+              >
+                打开发布页
+              </button>
+              <button
+                type="button"
+                className="cv-btn cv-btn-ghost text-xs"
+                onClick={() => {
+                  void getDiagnostics().then(async (d) => {
+                    if (!d) {
+                      showPixelToast('无诊断信息')
+                      return
+                    }
+                    await navigator.clipboard.writeText(JSON.stringify(d, null, 2))
+                    showPixelToast('诊断已复制')
+                  })
+                }}
+              >
+                复制诊断
+              </button>
               <span className="text-xs text-muted-foreground">
                 状态：{updateStatus}
                 {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
               </span>
             </div>
+            {updateInfo?.releaseNotes ? (
+              <p className="mt-2 max-h-20 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
+                {updateInfo.releaseNotes}
+              </p>
+            ) : null}
             <p className="mt-2 text-[11px] text-muted-foreground">
               安装包再次运行时：同一应用会覆盖升级，本地钥匙库默认保留。勿混用「仅当前用户 / 整机」两种安装方式。
             </p>

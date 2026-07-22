@@ -1,9 +1,9 @@
 /**
- * 快速片段表单组件 - 液态玻璃风格
+ * 快速片段表单 · 支持编辑 + 变量 chips
  */
 
 import { useState } from 'react'
-import type { CreateSnippetInput } from '@/types'
+import type { ClipboardItem, CreateSnippetInput, UpdateSnippetInput } from '@/types'
 
 /** 关闭图标 */
 const CloseIcon = () => (
@@ -12,19 +12,29 @@ const CloseIcon = () => (
   </svg>
 )
 
+const VARS = [
+  { token: '{date}', tip: '今天日期 YYYY-MM-DD' },
+  { token: '{time}', tip: '当前时间 HH:mm:ss' },
+  { token: '{datetime}', tip: '日期+时间' },
+  { token: '{year}', tip: '年份' },
+  { token: '{clip}', tip: '当前剪贴板文本' }
+]
+
 interface SnippetFormProps {
-  onSubmit: (input: CreateSnippetInput) => Promise<void>
+  snippet?: ClipboardItem | null
+  onSubmit: (input: CreateSnippetInput | UpdateSnippetInput) => Promise<void>
   onCancel: () => void
 }
 
 export default function SnippetForm({
+  snippet,
   onSubmit,
   onCancel
 }: SnippetFormProps): JSX.Element {
-  const [name, setName] = useState('')
-  const [content, setContent] = useState('')
-  const [shortcut, setShortcut] = useState('')
-  const [tagsInput, setTagsInput] = useState('')
+  const [name, setName] = useState(snippet?.snippetName || '')
+  const [content, setContent] = useState(snippet?.content || '')
+  const [shortcut, setShortcut] = useState(snippet?.snippetShortcut || '')
+  const [tagsInput, setTagsInput] = useState((snippet?.tags ?? []).join(', '))
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -54,15 +64,29 @@ export default function SnippetForm({
         .map((t) => t.trim())
         .filter((t) => t)
 
-      await onSubmit({
-        name: name.trim(),
-        content: content.trim(),
-        shortcut: shortcut.trim() || undefined,
-        tags: tags.length > 0 ? tags : undefined
-      })
+      if (snippet?.id) {
+        await onSubmit({
+          id: snippet.id,
+          name: name.trim(),
+          content: content.trim(),
+          shortcut: shortcut.trim() || undefined,
+          tags: tags.length > 0 ? tags : undefined
+        })
+      } else {
+        await onSubmit({
+          name: name.trim(),
+          content: content.trim(),
+          shortcut: shortcut.trim() || undefined,
+          tags: tags.length > 0 ? tags : undefined
+        })
+      }
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const insertVar = (token: string): void => {
+    setContent((c) => c + token)
   }
 
   return (
@@ -77,7 +101,7 @@ export default function SnippetForm({
             className="text-lg font-semibold"
             style={{ color: 'var(--text-primary)' }}
           >
-            新建快速片段
+            {snippet ? '编辑片段' : '新建快速片段'}
           </h3>
           <button
             onClick={onCancel}
@@ -128,8 +152,21 @@ export default function SnippetForm({
             {errors.content && (
               <p className="text-sm mt-1" style={{ color: '#dc6464' }}>{errors.content}</p>
             )}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {VARS.map((v) => (
+                <button
+                  key={v.token}
+                  type="button"
+                  className="rounded border px-2 py-0.5 font-mono text-[11px]"
+                  title={v.tip}
+                  onClick={() => insertVar(v.token)}
+                >
+                  {v.token}
+                </button>
+              ))}
+            </div>
             <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              {content.length} 个字符
+              {content.length} 个字符 · 点击变量插入；复制时自动展开
             </p>
           </div>
 
@@ -149,7 +186,9 @@ export default function SnippetForm({
               onChange={(e) => setShortcut(e.target.value)}
             />
             <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              设置一个简短的标识，方便快速查找
+              全局热键请填 Electron 格式，如{' '}
+              <code className="font-mono">CommandOrControl+Alt+1</code>
+              ；普通别名（如 sig1）仅用于搜索，不会注册全局键。
             </p>
           </div>
 

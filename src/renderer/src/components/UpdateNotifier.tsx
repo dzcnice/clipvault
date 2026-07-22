@@ -4,17 +4,27 @@
  * - 有新版本 → 下载
  * - 下载中 → 进度
  * - 已下载 → 立即重启安装
- * - 错误 → 文案 + 重试检查
+ * - 错误 → 文案 + 重试 + 诊断 + 打开 Release
  */
 
 import { useMemo, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
-import { Download, RefreshCw, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { Download, RefreshCw, AlertCircle, CheckCircle2, X, ExternalLink, Copy } from 'lucide-react'
 import { useUpdater } from '@renderer/hooks/useUpdater'
+import { showPixelToast } from './PixelToast'
 
 export function UpdateNotifier(): JSX.Element | null {
-  const { status, info, progress, error, download, quitAndInstall, check } =
-    useUpdater()
+  const {
+    status,
+    info,
+    progress,
+    error,
+    download,
+    quitAndInstall,
+    check,
+    getDiagnostics,
+    openReleasePage
+  } = useUpdater()
   const [dismissed, setDismissed] = useState(false)
 
   const visible = useMemo(() => {
@@ -28,6 +38,21 @@ export function UpdateNotifier(): JSX.Element | null {
       status === 'error'
     )
   }, [status, dismissed])
+
+  const copyDiag = async (): Promise<void> => {
+    try {
+      const d = await getDiagnostics()
+      if (!d) {
+        showPixelToast('无法获取诊断信息')
+        return
+      }
+      const text = JSON.stringify(d, null, 2)
+      await navigator.clipboard.writeText(text)
+      showPixelToast('诊断信息已复制')
+    } catch {
+      showPixelToast('复制失败')
+    }
+  }
 
   if (!visible) return null
 
@@ -53,7 +78,7 @@ export function UpdateNotifier(): JSX.Element | null {
             <RefreshCw className="h-4 w-4" /> 发现新版本 {info?.version}
           </div>
           {info?.releaseNotes ? (
-            <p className="mb-3 max-h-24 overflow-auto text-xs text-muted-foreground">
+            <p className="mb-3 max-h-24 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
               {info.releaseNotes}
             </p>
           ) : (
@@ -61,9 +86,19 @@ export function UpdateNotifier(): JSX.Element | null {
               建议在空闲时更新。下载不会影响当前使用。
             </p>
           )}
-          <Button size="sm" onClick={() => void download()}>
-            <Download className="mr-1 h-4 w-4" /> 下载更新
-          </Button>
+          {info?.releaseDate ? (
+            <p className="mb-2 text-[10px] text-muted-foreground">
+              发布于 {new Date(info.releaseDate).toLocaleString()}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => void download()}>
+              <Download className="mr-1 h-4 w-4" /> 下载更新
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void openReleasePage()}>
+              <ExternalLink className="mr-1 h-3.5 w-3.5" /> 发布页
+            </Button>
+          </div>
         </>
       )}
 
@@ -103,20 +138,21 @@ export function UpdateNotifier(): JSX.Element | null {
 
       {status === 'error' && (
         <>
-          <div className="mb-2 flex items-start gap-2 pr-6 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <span>更新失败：{error ?? '未知错误'}</span>
+          <div className="mb-2 flex items-center gap-2 pr-6 text-sm font-semibold text-destructive">
+            <AlertCircle className="h-4 w-4" /> 更新出错
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              setDismissed(false)
-              void check()
-            }}
-          >
-            <RefreshCw className="mr-1 h-4 w-4" /> 重试检查
-          </Button>
+          <p className="mb-3 text-xs text-muted-foreground">{error || '未知错误'}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => void check()}>
+              重试检查
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void openReleasePage()}>
+              <ExternalLink className="mr-1 h-3.5 w-3.5" /> 手动下载
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void copyDiag()}>
+              <Copy className="mr-1 h-3.5 w-3.5" /> 复制诊断
+            </Button>
+          </div>
         </>
       )}
     </div>

@@ -1,14 +1,15 @@
 /**
- * AutoUpdater 封装 · v3.1
+ * AutoUpdater 封装 · v3.2
  *
- * - 启动 30s 后首次检查，之后每 4h
+ * - 启动 30s 后首次检查，之后按 prefs 间隔（默认 4h）
  * - 检查自动 / 下载需用户确认（autoDownload=false）
  * - 下载完成后可「立即重启安装」或退出时安装
  * - 发布源 404/DNS 失败时暂停周期检查；手动检查会重新尝试
+ * - prefs：autoUpdateCheck / updateCheckIntervalHours / updateChannel
  */
 
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow, shell } from 'electron'
 import { logger } from '../utils/logger'
 import {
   UPDATER_CHANNELS,
@@ -16,12 +17,14 @@ import {
   type UpdaterEvent,
   type UpdaterStatus,
   type UpdateInfoPayload,
-  type UpdateProgressPayload
+  type UpdateProgressPayload,
+  type UpdaterDiagnostics
 } from '../../types/updater'
 import { resolveChannel } from './channel'
+import { getPrefs } from '../prefs'
 
 const FIRST_CHECK_DELAY_MS = 30_000
-const INTERVAL_MS = 4 * 60 * 60 * 1000 // 4h
+const DEFAULT_INTERVAL_MS = 4 * 60 * 60 * 1000
 
 function humanizeUpdaterError(msg: string): string {
   const m = msg || '未知错误'
@@ -52,6 +55,8 @@ export class UpdaterService {
   private intervalTimer: NodeJS.Timeout | null = null
   private bound = false
   private currentChannel: UpdateChannel = 'stable'
+  private autoCheckEnabled = true
+  private intervalMs = DEFAULT_INTERVAL_MS
   /**
    * 发布源不可达时禁用周期性检查，避免刷屏。
    * 手动 checkForUpdates() 会清零并重试。
@@ -62,17 +67,10 @@ export class UpdaterService {
     this.mainWindow = mainWindow
     this.bindListeners()
 
-    // 大厂常见：自动检查，下载需确认
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
-    // 允许降级检测关闭；仅更高版本提示
     autoUpdater.allowDowngrade = false
-    /**
-     * Windows NsisUpdater：默认用 Authenticode 校验发布者。
-     * 未签名安装包会报 “not digitally signed / SignerCertificate null”。
-     * 无 CSC/Azure 凭据时注入 no-op 校验（返回 null = 通过）；sha512 仍由 electron-updater 校验。
-     * 设 CLIPVAULT_REQUIRE_UPDATE_SIGNATURE=1 可强制走系统签名校验。
-     */
+
     const requireSig =
       process.env.CLIPVAULT_REQUIRE_UPDATE_SIGNATURE === '1' ||
       Boolean(process.env.CSC_LINK && process.env.CSC_KEY_PASSWORD) ||
@@ -96,7 +94,16 @@ export class UpdaterService {
       debug: () => {}
     } as never
 
-    // 应用当前通道：默认 stable（与 latest.yml 对应）
+    // 从 prefs 拉通道与检查策略
+    try {
+      const p = getPrefs()
+      this.currentChannel = p.updateChannel === 'beta' ? 'beta' : 'stable'
+      this.autoCheckEnabled = p.autoUpdateCheck !== false
+      this.intervalMs = Math.max(1, Math.min(24, p.updateCheckIntervalHours || 4)) * 60 * 60 * 1000
+    } catch {
+      /* defaults */
+    }
+
     this.applyChannelConfig(this.currentChannel)
     this.scheduleChecks()
   }
@@ -112,7 +119,33 @@ export class UpdaterService {
     }
   }
 
+  /** prefs 变更后重排周期检查 */
+  reconfigureFromPrefs(): void {
+    try {
+      const p = getPrefs()
+      this.autoCheckEnabled = p.autoUpdateCheck !== false
+      this.intervalMs = Math.max(1, Math.min(24, p.updateCheckIntervalHours || 4)) * 60 * 60 * 1000
+      if (p.updateChannel === 'stable' || p.updateChannel === 'beta') {
+        this.currentChannel = p.updateChannel
+        this.applyChannelConfig(this.currentChannel)
+      }
+    } catch {
+      /* ignore */
+    }
+    this.stop()
+    if (this.autoCheckEnabled) {
+      this.scheduleChecks()
+    }
+    logger.info(
+      `[updater] reconfigured auto=${this.autoCheckEnabled} intervalMs=${this.intervalMs} channel=${this.currentChannel}`
+    )
+  }
+
   private scheduleChecks(): void {
+    if (!this.autoCheckEnabled) {
+      logger.info('[updater] auto check disabled by prefs')
+      return
+    }
     this.firstCheckTimer = setTimeout(() => {
       void this.checkForUpdates().catch((e) =>
         logger.warn(`[updater] first check failed: ${(e as Error).message}`)
@@ -120,14 +153,13 @@ export class UpdaterService {
     }, FIRST_CHECK_DELAY_MS)
 
     this.intervalTimer = setInterval(() => {
-      if (this.sourceDisabled) return
+      if (this.sourceDisabled || !this.autoCheckEnabled) return
       void this.checkForUpdates().catch((e) =>
         logger.warn(`[updater] periodic check failed: ${(e as Error).message}`)
       )
-    }, INTERVAL_MS)
+    }, this.intervalMs)
   }
 
-  /** 手动检查时重新启用周期源 */
   reenableSource(): void {
     if (this.sourceDisabled) {
       this.sourceDisabled = false
@@ -136,12 +168,10 @@ export class UpdaterService {
   }
 
   async checkForUpdates(): Promise<UpdateInfoPayload | null> {
-    // 用户/设置触发的检查：允许恢复源
     this.reenableSource()
     try {
       this.setStatus('checking')
       const res = await autoUpdater.checkForUpdates()
-      // 能连上源即恢复周期检查
       this.sourceDisabled = false
       const info = res?.updateInfo ? this.toInfoPayload(res.updateInfo) : null
       return info
@@ -179,7 +209,6 @@ export class UpdaterService {
   }
 
   quitAndInstall(): void {
-    // isSilent=false, isForceRunAfter=true
     autoUpdater.quitAndInstall(false, true)
   }
 
@@ -187,6 +216,14 @@ export class UpdaterService {
     this.currentChannel = channel
     this.applyChannelConfig(channel)
     this.reenableSource()
+    try {
+      const { setPrefs } = require('../prefs') as {
+        setPrefs: (p: { updateChannel: UpdateChannel }) => void
+      }
+      setPrefs({ updateChannel: channel })
+    } catch {
+      /* ignore */
+    }
     logger.info(`[updater] channel switched to ${channel}`)
   }
 
@@ -211,6 +248,27 @@ export class UpdaterService {
       error: this.lastError,
       channel: this.currentChannel
     }
+  }
+
+  /** 诊断信息：便于用户复制到 issue */
+  getDiagnostics(): UpdaterDiagnostics {
+    return {
+      appVersion: app.getVersion(),
+      channel: this.currentChannel,
+      status: this.currentStatus,
+      lastError: this.lastError,
+      lastInfoVersion: this.lastInfo?.version,
+      sourceDisabled: this.sourceDisabled,
+      autoCheckEnabled: this.autoCheckEnabled,
+      intervalHours: Math.round(this.intervalMs / 3600_000),
+      platform: process.platform,
+      feedUrlHint: 'https://github.com/dzcnice/clipvault/releases'
+    }
+  }
+
+  async openReleasePage(): Promise<void> {
+    const url = 'https://github.com/dzcnice/clipvault/releases'
+    await shell.openExternal(url)
   }
 
   private bindListeners(): void {

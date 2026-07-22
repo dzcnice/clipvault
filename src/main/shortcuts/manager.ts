@@ -139,6 +139,20 @@ export class ShortcutManager {
       return false
     }
 
+    const norm = (accelerator || '').trim()
+    if (!norm) {
+      logger.warn('[Shortcuts] empty accelerator rejected')
+      return false
+    }
+
+    // 与本应用其它命令冲突（目标形态：先拦应用内冲突，再问系统）
+    for (const [id, acc] of this.active) {
+      if (id !== commandId && acc === norm) {
+        logger.warn(`[Shortcuts] conflict with ${id}=${norm}`)
+        return false
+      }
+    }
+
     const oldAcc = this.active.get(commandId)
     if (oldAcc) {
       try {
@@ -148,17 +162,37 @@ export class ShortcutManager {
       }
     }
 
-    const ok = this.tryRegister(cmd, accelerator)
+    // hud.toggle 由 HUD manager 接管注册；此处只持久化配置
+    if (commandId === 'hud.toggle') {
+      this.active.set(commandId, norm)
+      this.registered.set(commandId, true)
+      this.persist(commandId, norm, norm === cmd.defaultAccelerator)
+      return true
+    }
+
+    const ok = this.tryRegister(cmd, norm)
     if (!ok) {
-      // 回滚：重新注册旧值
       if (oldAcc) this.tryRegister(cmd, oldAcc)
       return false
     }
 
-    this.active.set(commandId, accelerator)
-    const isDefault = accelerator === cmd.defaultAccelerator
-    this.persist(commandId, accelerator, isDefault)
+    this.active.set(commandId, norm)
+    const isDefault = norm === cmd.defaultAccelerator
+    this.persist(commandId, norm, isDefault)
     return true
+  }
+
+  /** 探测 accelerator 是否与本应用已有绑定冲突（不改系统注册） */
+  findConflict(
+    commandId: ShortcutCommandId,
+    accelerator: string
+  ): ShortcutCommandId | null {
+    const norm = (accelerator || '').trim()
+    if (!norm) return null
+    for (const [id, acc] of this.active) {
+      if (id !== commandId && acc === norm) return id
+    }
+    return null
   }
 
   /** 外部 API：重置某条（或全部）到默认值 */

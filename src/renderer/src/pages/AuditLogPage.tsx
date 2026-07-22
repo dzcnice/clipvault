@@ -24,14 +24,21 @@ const ACTIONS: Array<CredentialAuditAction | ''> = [
 export function AuditLogPage(): JSX.Element {
   const [credId, setCredId] = useState('')
   const [action, setAction] = useState<CredentialAuditAction | ''>('')
+  const [sinceDays, setSinceDays] = useState(0)
   const { items, total, loading, reload, exportCsv, clear } = useCredentialAudit()
   const confirm = useConfirm()
+
+  const timeRange = (): { fromTs?: number } => {
+    if (sinceDays <= 0) return {}
+    return { fromTs: Date.now() - sinceDays * 24 * 60 * 60 * 1000 }
+  }
 
   const applyFilter = async (): Promise<void> => {
     await reload({
       credentialId: credId || undefined,
       action: action || undefined,
-      limit: 1000
+      limit: 1000,
+      ...timeRange()
     })
   }
 
@@ -39,7 +46,8 @@ export function AuditLogPage(): JSX.Element {
     const csv = await exportCsv({
       credentialId: credId || undefined,
       action: action || undefined,
-      limit: 1000
+      limit: 1000,
+      ...timeRange()
     })
     if (!csv) return
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -78,6 +86,18 @@ export function AuditLogPage(): JSX.Element {
             </option>
           ))}
         </select>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          最近
+          <input
+            type="number"
+            min={0}
+            max={365}
+            value={sinceDays}
+            onChange={(e) => setSinceDays(Math.max(0, Number(e.target.value) || 0))}
+            style={{ width: 56, padding: '4px 6px' }}
+          />
+          天（0=全部）
+        </label>
         <button type="button" onClick={applyFilter}>
           查询
         </button>

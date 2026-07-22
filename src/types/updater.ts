@@ -34,11 +34,27 @@ export interface UpdaterEvent {
   error?: string
 }
 
+/** 更新诊断（C2） */
+export interface UpdaterDiagnostics {
+  appVersion: string
+  channel: UpdateChannel
+  status: UpdaterStatus
+  lastError?: string
+  lastInfoVersion?: string
+  sourceDisabled: boolean
+  autoCheckEnabled: boolean
+  intervalHours: number
+  platform: string
+  feedUrlHint: string
+}
+
 export const UPDATER_CHANNELS = {
   CHECK: 'updater:check',
   DOWNLOAD: 'updater:download',
   QUIT_AND_INSTALL: 'updater:quit-and-install',
   SET_CHANNEL: 'updater:set-channel',
   GET_STATE: 'updater:get-state',
+  GET_DIAGNOSTICS: 'updater:get-diagnostics',
+  OPEN_RELEASE: 'updater:open-release',
   EVENT: 'updater:event'
 } as const

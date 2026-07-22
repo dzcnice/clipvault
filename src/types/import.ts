@@ -8,6 +8,17 @@ export type ImportSource =
   | 'chrome'
   | 'lastpass'
   | 'keepass'
+  | 'generic-csv'
+
+/** 通用 CSV 列映射 */
+export interface GenericCsvMapping {
+  name?: string
+  username?: string
+  password?: string
+  url?: string
+  notes?: string
+  tags?: string
+}
 
 export interface ImportedCredential {
   /** 目标 type：映射到 CredentialType 的字符串 */
@@ -36,6 +47,8 @@ export interface ImportRequest {
   password?: string
   /** KeePass 密钥文件（可选） */
   keyFile?: string
+  /** 通用 CSV 列映射 */
+  mapping?: GenericCsvMapping
 }
 
 export const IMPORT_CHANNELS = {

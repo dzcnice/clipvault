@@ -16,6 +16,8 @@ import {
   normalizeImagesDir,
   type ClipVaultPrefs
 } from '../prefs'
+import { getClipboardMonitor } from '../clipboard/monitor'
+import { updaterService } from '../updater'
 
 export function registerSystemHandlers(): void {
   ipcMain.handle(
@@ -113,6 +115,42 @@ export function registerSystemHandlers(): void {
         if (typeof partial?.onboardingTipsSeen === 'boolean') {
           patch.onboardingTipsSeen = partial.onboardingTipsSeen
         }
+        if (typeof partial?.maxHistorySize === 'number') {
+          patch.maxHistorySize = partial.maxHistorySize
+        }
+        if (Array.isArray(partial?.excludedApps)) {
+          patch.excludedApps = partial.excludedApps
+        }
+        if (typeof partial?.clipboardMonitorEnabled === 'boolean') {
+          patch.clipboardMonitorEnabled = partial.clipboardMonitorEnabled
+        }
+        if (typeof partial?.saveImages === 'boolean') {
+          patch.saveImages = partial.saveImages
+        }
+        if (typeof partial?.maxImageSizeKb === 'number') {
+          patch.maxImageSizeKb = partial.maxImageSizeKb
+        }
+        if (typeof partial?.enableSmartDetection === 'boolean') {
+          patch.enableSmartDetection = partial.enableSmartDetection
+        }
+        if (typeof partial?.autoUpdateCheck === 'boolean') {
+          patch.autoUpdateCheck = partial.autoUpdateCheck
+        }
+        if (typeof partial?.updateCheckIntervalHours === 'number') {
+          patch.updateCheckIntervalHours = partial.updateCheckIntervalHours
+        }
+        if (partial?.updateChannel === 'stable' || partial?.updateChannel === 'beta') {
+          patch.updateChannel = partial.updateChannel
+        }
+        if (typeof partial?.maskSecretsByDefault === 'boolean') {
+          patch.maskSecretsByDefault = partial.maskSecretsByDefault
+        }
+        if (typeof partial?.biometricOnCopy === 'boolean') {
+          patch.biometricOnCopy = partial.biometricOnCopy
+        }
+        if (typeof partial?.biometricOnExport === 'boolean') {
+          patch.biometricOnExport = partial.biometricOnExport
+        }
         let willMigrate = false
         let targetDir: string | null = null
         if (partial && 'imagesDir' in partial) {
@@ -138,6 +176,40 @@ export function registerSystemHandlers(): void {
           }
         }
         const next = setPrefs(patch)
+
+        // 同步剪贴板 monitor
+        try {
+          const mon = getClipboardMonitor()
+          mon.updateSettings({
+            maxImageSize: next.maxImageSizeKb,
+            enableSmartDetection: next.enableSmartDetection,
+            saveImages: next.saveImages,
+            excludedApps: next.excludedApps,
+            minClipboardLength: next.minClipboardLength
+          })
+          if (typeof patch.clipboardMonitorEnabled === 'boolean') {
+            if (patch.clipboardMonitorEnabled) mon.start()
+            else mon.stop()
+          }
+        } catch (err) {
+          logger.warn('[prefs] apply monitor settings failed:', err)
+        }
+
+        // 同步更新服务
+        try {
+          if (patch.updateChannel) {
+            updaterService.setChannel(patch.updateChannel)
+          }
+          if (
+            typeof patch.autoUpdateCheck === 'boolean' ||
+            typeof patch.updateCheckIntervalHours === 'number'
+          ) {
+            updaterService.reconfigureFromPrefs()
+          }
+        } catch (err) {
+          logger.warn('[prefs] apply updater settings failed:', err)
+        }
+
         let imageMigrate:
           | {
               scanned: number

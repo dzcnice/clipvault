@@ -55,6 +55,11 @@ interface ClipboardListProps {
   onCopyImage?: (item: ClipboardItem, mode: ImageCopyMode) => void
   /** @deprecated 使用 onCopyImage(..., 'path') */
   onCopyPath?: (item: ClipboardItem) => void
+  /** 多选：选中 id 集合 */
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  /** 折叠重复：同 hash 仅展示首条时的提示 */
+  duplicateOf?: Map<string, number>
 }
 
 export default function ClipboardList({
@@ -63,7 +68,10 @@ export default function ClipboardList({
   onPin,
   onDelete,
   onCopyImage,
-  onCopyPath
+  onCopyPath,
+  selectedIds,
+  onToggleSelect,
+  duplicateOf
 }: ClipboardListProps): JSX.Element {
   const handleImageMode = (item: ClipboardItem, mode: ImageCopyMode): void => {
     if (onCopyImage) {
@@ -82,7 +90,9 @@ export default function ClipboardList({
       {items.map((item) => (
         <div
           key={item.id}
-          className={`cv-list-row group ${item.isPinned ? 'cv-list-row-active' : ''}`}
+          className={`cv-list-row group ${item.isPinned ? 'cv-list-row-active' : ''} ${
+            selectedIds?.has(item.id) ? 'ring-1 ring-[var(--primary)]' : ''
+          }`}
           onDoubleClick={() => onCopy(item)}
           title="双击按默认偏好复制"
           role="button"
@@ -91,6 +101,19 @@ export default function ClipboardList({
             if (e.key === 'Enter') onCopy(item)
           }}
         >
+          {onToggleSelect ? (
+            <input
+              type="checkbox"
+              className="mx-1 h-4 w-4 shrink-0"
+              checked={selectedIds?.has(item.id) ?? false}
+              onChange={(e) => {
+                e.stopPropagation()
+                onToggleSelect(item.id)
+              }}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="选择"
+            />
+          ) : null}
           <div
             className="cv-icon-slot"
             style={{
@@ -137,6 +160,18 @@ export default function ClipboardList({
                   ? `${(item.size / 1024).toFixed(1)} KB`
                   : `${item.size} B`}
               </span>
+              {item.sourceApp ? (
+                <>
+                  <span>·</span>
+                  <span title="来源应用">{item.sourceApp}</span>
+                </>
+              ) : null}
+              {duplicateOf?.get(item.hash) && (duplicateOf.get(item.hash) ?? 0) > 1 ? (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-600">×{duplicateOf.get(item.hash)} 相似</span>
+                </>
+              ) : null}
               {item.type === 'image' ? (
                 <>
                   <span>·</span>

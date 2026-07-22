@@ -60,8 +60,16 @@ const api = {
     }): Promise<ApiResponse<{ items: Credential[]; total: number }>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CREDENTIAL_LIST, params),
 
-    copy: (id: string): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CREDENTIAL_COPY, id)
+    copy: (
+      id: string,
+      opts?: {
+        field?: 'value' | 'username' | 'totp'
+        thenPaste?: boolean
+        sequence?: 'username_then_value'
+        delayMs?: number
+      }
+    ): Promise<ApiResponse<boolean>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CREDENTIAL_COPY, id, opts)
   },
 
   // ==================== 分类 API ====================
@@ -107,6 +115,21 @@ const api = {
 
     deleteItem: (id: string): Promise<ApiResponse<boolean>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_DELETE_ITEM, id),
+
+    deleteItems: (ids: string[]): Promise<ApiResponse<number>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_DELETE_ITEMS, ids),
+
+    deleteOlder: (opts: {
+      olderThanMs: number
+      keepPinned?: boolean
+    }): Promise<ApiResponse<number>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_DELETE_OLDER, opts),
+
+    batchPin: (opts: {
+      ids: string[]
+      pinned: boolean
+    }): Promise<ApiResponse<number>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_BATCH_PIN, opts),
 
     pinItem: (id: string): Promise<ApiResponse<boolean>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_PIN_ITEM, id),
@@ -433,6 +456,18 @@ const api = {
         autoClearTtlMs?: number
         hideAfterCopy?: boolean
         minClipboardLength?: number
+        maxHistorySize?: number
+        excludedApps?: string[]
+        clipboardMonitorEnabled?: boolean
+        saveImages?: boolean
+        maxImageSizeKb?: number
+        enableSmartDetection?: boolean
+        autoUpdateCheck?: boolean
+        updateCheckIntervalHours?: number
+        updateChannel?: 'stable' | 'beta'
+        maskSecretsByDefault?: boolean
+        biometricOnCopy?: boolean
+        biometricOnExport?: boolean
       }>
     > => ipcRenderer.invoke(IPC_CHANNELS.PREFS_GET),
     set: (
@@ -442,6 +477,18 @@ const api = {
         autoClearTtlMs?: number
         hideAfterCopy?: boolean
         minClipboardLength?: number
+        maxHistorySize?: number
+        excludedApps?: string[]
+        clipboardMonitorEnabled?: boolean
+        saveImages?: boolean
+        maxImageSizeKb?: number
+        enableSmartDetection?: boolean
+        autoUpdateCheck?: boolean
+        updateCheckIntervalHours?: number
+        updateChannel?: 'stable' | 'beta'
+        maskSecretsByDefault?: boolean
+        biometricOnCopy?: boolean
+        biometricOnExport?: boolean
       }>
     ): Promise<
       ApiResponse<{
@@ -452,6 +499,25 @@ const api = {
         autoClearTtlMs?: number
         hideAfterCopy?: boolean
         minClipboardLength?: number
+        maxHistorySize?: number
+        excludedApps?: string[]
+        clipboardMonitorEnabled?: boolean
+        saveImages?: boolean
+        maxImageSizeKb?: number
+        enableSmartDetection?: boolean
+        autoUpdateCheck?: boolean
+        updateCheckIntervalHours?: number
+        updateChannel?: 'stable' | 'beta'
+        maskSecretsByDefault?: boolean
+        biometricOnCopy?: boolean
+        biometricOnExport?: boolean
+        imageMigrate?: {
+          scanned: number
+          moved: number
+          updated: number
+          failed: number
+          skipped: number
+        }
       }>
     > => ipcRenderer.invoke(IPC_CHANNELS.PREFS_SET, partial),
     /** 系统对话框选择截图存储目录 */

@@ -36,11 +36,22 @@ export function registerShortcutHandlers(): void {
       if (!payload || typeof payload.commandId !== 'string') {
         return { success: false, error: 'Invalid payload' }
       }
+      const conflict = shortcutManager.findConflict(
+        payload.commandId,
+        payload.accelerator ?? ''
+      )
+      if (conflict) {
+        return {
+          success: false,
+          error: `与命令「${conflict}」冲突，请换一组键`,
+          data: shortcutManager.list()
+        }
+      }
       const ok = shortcutManager.set(payload.commandId, payload.accelerator ?? '')
       if (!ok) {
         return {
           success: false,
-          error: 'Failed to register accelerator (conflict or invalid)',
+          error: '注册失败：键位无效或被其它应用占用',
           data: shortcutManager.list()
         }
       }

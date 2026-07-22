@@ -136,6 +136,7 @@ vi.mock('../clipboard/monitor', async () => {
         stop: vi.fn(),
         writeText: vi.fn(),
         writeImage: vi.fn(),
+        updateSettings: vi.fn(),
         getStatus: () => ({ isRunning: false, interval: 500 })
       })
   }

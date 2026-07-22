@@ -12,6 +12,29 @@ export interface SearchResult<T> {
   }>
 }
 
+/** 常用汉字 → 拼音首字母（覆盖开发者场景足够的子集） */
+const PINYIN_INITIAL: Record<string, string> = {
+  剪: 'j', 贴: 't', 板: 'b', 凭: 'p', 证: 'z', 钥: 'y', 匙: 's',
+  片: 'p', 段: 'd', 设: 's', 置: 'z', 健: 'j', 康: 'k', 导: 'd',
+  入: 'r', 出: 'c', 搜: 's', 索: 's', 密: 'm', 码: 'm', 用: 'y',
+  户: 'h', 名: 'm', 库: 'k', 备: 'b', 份: 'f', 更: 'g', 新: 'x',
+  锁: 's', 开: 'k', 关: 'g', 历: 'l', 史: 's', 收: 's', 藏: 'c',
+  最: 'z', 近: 'j', 全: 'q', 部: 'b', 文: 'w', 本: 'b', 图: 't',
+  令: 'l', 牌: 'p', 概: 'g', 览: 'l', 复: 'f', 制: 'z', 删: 's',
+  除: 'c', 顶: 'd', 清: 'q', 空: 'k', 监: 'j', 听: 't', 应: 'y',
+  标: 'b', 签: 'q', 分: 'f', 类: 'l', 保: 'b', 险: 'x', 箱: 'x'
+}
+
+/** 将字符串转为拼音首字母串（非汉字保留小写） */
+export function toPinyinInitials(text: string): string {
+  let out = ''
+  for (const ch of text) {
+    if (PINYIN_INITIAL[ch]) out += PINYIN_INITIAL[ch]
+    else if (/[a-zA-Z0-9]/.test(ch)) out += ch.toLowerCase()
+  }
+  return out
+}
+
 /**
  * 计算两个字符串的模糊匹配得分
  * @param pattern 搜索模式
@@ -42,6 +65,18 @@ export function fuzzyMatch(
     return {
       score: 500 + positionBonus - containsIndex,
       matches: [{ start: containsIndex, end: containsIndex + pattern.length }]
+    }
+  }
+
+  // 拼音首字母匹配（pattern 为纯字母时）
+  if (/^[a-z]+$/i.test(patternLower)) {
+    const initials = toPinyinInitials(text)
+    if (initials.includes(patternLower)) {
+      const idx = initials.indexOf(patternLower)
+      return {
+        score: 400 - idx,
+        matches: [{ start: 0, end: Math.min(text.length, pattern.length) }]
+      }
     }
   }
 

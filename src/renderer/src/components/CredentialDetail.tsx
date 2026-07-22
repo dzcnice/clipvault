@@ -63,9 +63,16 @@ export default function CredentialDetail({
   onToggleFavorite
 }: CredentialDetailProps): JSX.Element {
   const [showValue, setShowValue] = useState(false)
+  const [maskDefault, setMaskDefault] = useState(true)
 
   useEffect(() => {
     setShowValue(false)
+    void window.api.prefs?.get?.().then((res) => {
+      if (res.success && res.data && typeof res.data.maskSecretsByDefault === 'boolean') {
+        setMaskDefault(res.data.maskSecretsByDefault)
+        setShowValue(!res.data.maskSecretsByDefault)
+      }
+    })
   }, [credential.id])
 
   const formatDate = (timestamp: number): string => {
@@ -73,6 +80,7 @@ export default function CredentialDetail({
   }
 
   const maskValue = (value: string): string => {
+    if (!maskDefault && showValue) return value
     if (value.length <= 8) {
       return '••••••••'
     }
@@ -113,6 +121,63 @@ export default function CredentialDetail({
                 <StarIcon filled={!!credential.isFavorite} />
               </button>
             ) : null}
+            {credential.metadata.username ? (
+              <button
+                type="button"
+                className="glass-btn glass-btn-secondary flex items-center gap-2"
+                title="复制用户名"
+                onClick={() => {
+                  void window.api.credential
+                    .copy(credential.id, { field: 'username' })
+                    .then((r) => {
+                      if (!r.success) {
+                        void navigator.clipboard.writeText(credential.metadata.username ?? '')
+                      }
+                    })
+                }}
+              >
+                <CopyIcon />
+                <span>用户名</span>
+              </button>
+            ) : null}
+            {credential.metadata.username ? (
+              <button
+                type="button"
+                className="glass-btn glass-btn-secondary flex items-center gap-2 text-xs"
+                title="先用户名后密码（间隔复制）"
+                disabled={credential.decryptError}
+                onClick={() => {
+                  void window.api.credential.copy(credential.id, {
+                    sequence: 'username_then_value',
+                    delayMs: 800
+                  })
+                }}
+              >
+                用户名→密码
+              </button>
+            ) : null}
+            {(credential.metadata.endpoint ||
+              credential.metadata.custom?.url ||
+              credential.metadata.host) && (
+              <button
+                type="button"
+                className="glass-btn glass-btn-secondary flex items-center gap-2"
+                title="打开链接"
+                onClick={() => {
+                  const url =
+                    credential.metadata.endpoint ||
+                    credential.metadata.custom?.url ||
+                    (credential.metadata.host
+                      ? `https://${credential.metadata.host}`
+                      : '')
+                  if (url) {
+                    void window.open(url, '_blank', 'noopener,noreferrer')
+                  }
+                }}
+              >
+                <span>打开 URL</span>
+              </button>
+            )}
             <button
               onClick={onCopy}
               disabled={credential.decryptError}
@@ -122,6 +187,20 @@ export default function CredentialDetail({
             >
               <CopyIcon />
               <span>复制</span>
+            </button>
+            <button
+              type="button"
+              className="glass-btn glass-btn-secondary flex items-center gap-2 text-xs"
+              title="复制密钥并粘贴到前台窗口（Windows）"
+              disabled={credential.decryptError}
+              onClick={() => {
+                void window.api.credential.copy(credential.id, {
+                  field: 'value',
+                  thenPaste: true
+                })
+              }}
+            >
+              复制并粘贴
             </button>
             <button onClick={onEdit} className="glass-btn glass-btn-secondary flex items-center gap-2">
               <EditIcon />

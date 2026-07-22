@@ -51,6 +51,9 @@ export const sprint11API = {
       ipcRenderer.invoke(SPRINT11_CHANNELS.TOTP_DELETE, { credentialId }),
     get: (credentialId: string): Promise<ApiResponse<TOTPConfig | null>> =>
       ipcRenderer.invoke(SPRINT11_CHANNELS.TOTP_GET, { credentialId }),
+    list: (): Promise<
+      ApiResponse<Array<TOTPConfig & { credentialName: string }>>
+    > => ipcRenderer.invoke(SPRINT11_CHANNELS.TOTP_LIST),
     generate: (
       payload: { credentialId?: string; config?: TOTPConfig }
     ): Promise<ApiResponse<TOTPCode>> =>

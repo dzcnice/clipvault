@@ -3,6 +3,7 @@
  */
 
 import { StepImport } from '../components/onboarding/StepImport'
+import { StepRecovery } from '../components/onboarding/StepRecovery'
 import { StepShortcut } from '../components/onboarding/StepShortcut'
 import { StepWelcome } from '../components/onboarding/StepWelcome'
 import { useOnboarding } from '../hooks/useOnboarding'
@@ -27,6 +28,15 @@ export default function OnboardingPage({ onFinished }: Props): JSX.Element {
     case 'shortcut':
       return (
         <StepShortcut
+          {...common}
+          onPrev={ob.prev}
+          onNext={ob.next}
+          onSkip={ob.skip}
+        />
+      )
+    case 'recovery':
+      return (
+        <StepRecovery
           {...common}
           onPrev={ob.prev}
           onNext={ob.next}

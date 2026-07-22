@@ -12,7 +12,8 @@ import {
   UPDATER_CHANNELS,
   type UpdateChannel,
   type UpdateInfoPayload,
-  type UpdaterEvent
+  type UpdaterEvent,
+  type UpdaterDiagnostics
 } from '../../types/updater'
 import { updaterService } from '../updater'
 import { isValidChannel } from '../updater/channel'
@@ -27,6 +28,7 @@ import { parseBitwardenJson } from '../import/bitwarden'
 import { parseChromeCsv } from '../import/chrome'
 import { parseLastpassCsv } from '../import/lastpass'
 import { parseKeepassKdbx } from '../import/keepass'
+import { parseGenericCsv, guessMapping } from '../import/generic-csv'
 import { createCredential } from '../../db/credential-store'
 import type { CredentialType } from '../../types'
 
@@ -99,6 +101,29 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
   )
 
   ipcMain.handle(
+    UPDATER_CHANNELS.GET_DIAGNOSTICS,
+    wrapHandler(async (): Promise<ApiResponse<UpdaterDiagnostics>> => {
+      try {
+        return { success: true, data: updaterService.getDiagnostics() }
+      } catch (err) {
+        return { success: false, error: (err as Error).message }
+      }
+    })
+  )
+
+  ipcMain.handle(
+    UPDATER_CHANNELS.OPEN_RELEASE,
+    wrapHandler(async (): Promise<ApiResponse<boolean>> => {
+      try {
+        await updaterService.openReleasePage()
+        return { success: true, data: true }
+      } catch (err) {
+        return { success: false, error: (err as Error).message }
+      }
+    })
+  )
+
+  ipcMain.handle(
     UPDATER_CHANNELS.GET_STATE,
     wrapHandler(async (): Promise<ApiResponse<UpdaterEvent & { channel: UpdateChannel }>> => {
       try {
@@ -136,6 +161,22 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
           case 'keepass':
             result = await parseKeepassKdbx(req.content, req.password, req.keyFile)
             break
+          case 'generic-csv': {
+            const firstLine = req.content.split(/\r?\n/)[0] ?? ''
+            const headers = firstLine
+              .split(',')
+              .map((h) => h.replace(/^"|"$/g, '').trim())
+              .filter(Boolean)
+            const mapping = req.mapping ?? guessMapping(headers)
+            const auto = parseGenericCsv(req.content, mapping)
+            result = {
+              source: 'generic-csv',
+              items: auto.items,
+              skipped: auto.skipped,
+              warnings: auto.headers.length ? [`列: ${auto.headers.join(', ')}`] : []
+            }
+            break
+          }
           default:
             return { success: false, error: `unknown source: ${String(req.source)}` }
         }

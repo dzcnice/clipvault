@@ -9,7 +9,7 @@ import SnippetForm from '../components/SnippetForm'
 import { useConfirm } from '../components/ConfirmDialog'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { logger } from '../utils/logger'
-import type { ClipboardItem, CreateSnippetInput } from '@/types'
+import type { ClipboardItem, CreateSnippetInput, UpdateSnippetInput } from '@/types'
 
 /** 文件夹图标 */
 const FolderIcon = () => (
@@ -41,18 +41,34 @@ const TrashIcon = () => (
 
 export default function SnippetsPage(): JSX.Element {
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editing, setEditing] = useState<ClipboardItem | null>(null)
   const confirm = useConfirm()
   const { ctx } = useWorkspace()
-  const { snippets, loading, error, createSnippet, copySnippet, deleteSnippet } =
-    useSnippets({ workspace: ctx })
+  const {
+    snippets,
+    loading,
+    error,
+    createSnippet,
+    updateSnippet,
+    copySnippet,
+    deleteSnippet
+  } = useSnippets({ workspace: ctx })
 
   const handleCreate = (): void => {
+    setEditing(null)
     setIsFormOpen(true)
   }
 
-  const handleFormSubmit = async (input: CreateSnippetInput): Promise<void> => {
-    await createSnippet(input)
+  const handleFormSubmit = async (
+    input: CreateSnippetInput | UpdateSnippetInput
+  ): Promise<void> => {
+    if ('id' in input && input.id) {
+      await updateSnippet(input as UpdateSnippetInput)
+    } else {
+      await createSnippet(input as CreateSnippetInput)
+    }
     setIsFormOpen(false)
+    setEditing(null)
   }
 
   const handleCopy = async (snippet: ClipboardItem): Promise<void> => {
@@ -216,6 +232,16 @@ export default function SnippetsPage(): JSX.Element {
                       <CopyIcon />
                     </button>
                     <button
+                      onClick={() => {
+                        setEditing(snippet)
+                        setIsFormOpen(true)
+                      }}
+                      className="glass-btn glass-btn-icon glass-btn-sm"
+                      title="编辑"
+                    >
+                      编
+                    </button>
+                    <button
                       onClick={() => handleDelete(snippet)}
                       className="glass-btn glass-btn-danger glass-btn-icon glass-btn-sm"
                       title="删除"
@@ -234,8 +260,12 @@ export default function SnippetsPage(): JSX.Element {
       {/* 新建表单弹窗 */}
       {isFormOpen && (
         <SnippetForm
+          snippet={editing}
           onSubmit={handleFormSubmit}
-          onCancel={() => setIsFormOpen(false)}
+          onCancel={() => {
+            setIsFormOpen(false)
+            setEditing(null)
+          }}
         />
       )}
     </div>

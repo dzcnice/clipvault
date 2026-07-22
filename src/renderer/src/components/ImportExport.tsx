@@ -50,6 +50,15 @@ interface ExportOptions {
   jsonMode?: 'plain' | 'encrypted'
   /** A-1：加密导出密码 */
   exportPassword?: string
+  credentialFields?: {
+    value?: boolean
+    description?: boolean
+    tags?: boolean
+    metadata?: boolean
+    timestamps?: boolean
+  }
+  credentialsSince?: number
+  clipboardSince?: number
 }
 
 interface ImportResult {
@@ -76,6 +85,14 @@ export default function ImportExport({
     includeClipboard: true,
     includeCategories: true
   })
+  const [credFields, setCredFields] = useState({
+    value: true,
+    description: true,
+    tags: true,
+    metadata: true,
+    timestamps: true
+  })
+  const [sinceDays, setSinceDays] = useState(0)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -92,12 +109,24 @@ export default function ImportExport({
     }
     setIsExporting(true)
     try {
+      const since =
+        sinceDays > 0 ? Date.now() - sinceDays * 24 * 60 * 60 * 1000 : undefined
       await onExport({
         format: exportFormat,
         ...exportOptions,
-        jsonMode: exportFormat === 'json' ? jsonMode : undefined,
+        jsonMode:
+          exportFormat === 'json'
+            ? credFields.value
+              ? jsonMode
+              : 'plain'
+            : undefined,
         exportPassword:
-          exportFormat === 'json' && jsonMode === 'encrypted' ? exportPassword : undefined
+          exportFormat === 'json' && jsonMode === 'encrypted' && credFields.value
+            ? exportPassword
+            : undefined,
+        credentialFields: exportOptions.includeCredentials ? credFields : undefined,
+        credentialsSince: since,
+        clipboardSince: since
       })
     } finally {
       setIsExporting(false)
@@ -297,6 +326,57 @@ export default function ImportExport({
                 <span style={{ color: 'var(--text-primary)' }}>分类数据</span>
               </label>
             </div>
+          </div>
+
+          {exportOptions.includeCredentials && (
+            <div>
+              <label
+                className="block text-sm font-medium mb-2"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                凭证字段
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ['value', '密钥值（敏感）'],
+                    ['description', '描述'],
+                    ['tags', '标签'],
+                    ['metadata', '元数据'],
+                    ['timestamps', '时间戳']
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={credFields[key]}
+                      onChange={(e) =>
+                        setCredFields({ ...credFields, [key]: e.target.checked })
+                      }
+                      className="accent-[var(--morandi-green)]"
+                    />
+                    <span style={{ color: 'var(--text-primary)' }}>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                取消「密钥值」时始终按脱敏导出（不打包密文）
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4">
+            <label className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              仅导出最近 N 天（0=全部）
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={3650}
+              className="glass-input w-24 text-center"
+              value={sinceDays}
+              onChange={(e) => setSinceDays(Math.max(0, Number(e.target.value) || 0))}
+            />
           </div>
 
           {exportError && (

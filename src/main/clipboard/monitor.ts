@@ -15,6 +15,7 @@ import { clipboardAutoClear } from './auto-clear'
 import { ClipboardContentType } from '../../types'
 import type { CreateClipboardItemInput } from '../../types'
 import { detectCurrentClipboardFiles } from './file-clip-detector'
+import { getForegroundAppName, isAppExcluded, refreshForegroundAppName } from './source-app'
 
 /**
  * Batch 2C：剪贴板文件列表事件
@@ -31,6 +32,7 @@ export interface ClipboardChangeEvent {
   imageData?: string
   filePath?: string
   detectedKeyType?: string
+  sourceApp?: string
 }
 
 /** 识别当前剪贴板格式；没有有效数据返回 null */
@@ -72,16 +74,26 @@ export class ClipboardMonitor extends EventEmitter {
   private isRunning: boolean = false
   private maxImageSize: number
   private enableSmartDetection: boolean
+  private saveImages: boolean = true
+  private excludedApps: string[] = []
+  private minClipboardLength: number = 0
+  private lastSourceApp: string = ''
 
   constructor(options?: {
     pollInterval?: number
     maxImageSize?: number
     enableSmartDetection?: boolean
+    saveImages?: boolean
+    excludedApps?: string[]
+    minClipboardLength?: number
   }) {
     super()
     this.pollInterval = options?.pollInterval ?? 500
     this.maxImageSize = options?.maxImageSize ?? 5120 // 5MB in KB
     this.enableSmartDetection = options?.enableSmartDetection ?? true
+    this.saveImages = options?.saveImages ?? true
+    this.excludedApps = options?.excludedApps ?? []
+    this.minClipboardLength = options?.minClipboardLength ?? 0
   }
 
   /** 启动监听 */
@@ -128,6 +140,9 @@ export class ClipboardMonitor extends EventEmitter {
     pollInterval?: number
     maxImageSize?: number
     enableSmartDetection?: boolean
+    saveImages?: boolean
+    excludedApps?: string[]
+    minClipboardLength?: number
   }): void {
     if (options.pollInterval !== undefined) {
       this.pollInterval = options.pollInterval
@@ -137,6 +152,15 @@ export class ClipboardMonitor extends EventEmitter {
     }
     if (options.enableSmartDetection !== undefined) {
       this.enableSmartDetection = options.enableSmartDetection
+    }
+    if (options.saveImages !== undefined) {
+      this.saveImages = options.saveImages
+    }
+    if (options.excludedApps !== undefined) {
+      this.excludedApps = options.excludedApps
+    }
+    if (options.minClipboardLength !== undefined) {
+      this.minClipboardLength = options.minClipboardLength
     }
 
     // 如果正在运行，重启以应用新的轮询间隔
@@ -183,6 +207,17 @@ export class ClipboardMonitor extends EventEmitter {
     // v2.0 Sprint 13 TASK-068：新剪贴板内容到来时取消旧的 auto-clear 计时（已无意义）
     clipboardAutoClear.cancel()
 
+    // 来源应用 + 排除列表
+    const sourceApp = getForegroundAppName() || this.lastSourceApp
+    this.lastSourceApp = sourceApp
+    void refreshForegroundAppName().then((n) => {
+      if (n) this.lastSourceApp = n
+    })
+    if (isAppExcluded(sourceApp, this.excludedApps)) {
+      logger.info(`[ClipboardMonitor] skipped excluded app: ${sourceApp}`)
+      return
+    }
+
     // Batch 2C：优先识别文件列表（不入剪贴板历史，单独发 file-list 事件）
     const fileDetect = detectCurrentClipboardFiles()
     if (fileDetect.isFileList && fileDetect.paths.length > 0) {
@@ -204,7 +239,17 @@ export class ClipboardMonitor extends EventEmitter {
     if (type === ClipboardContentType.TEXT) {
       const read = readClipboardByType(ClipboardContentType.TEXT)
       if (read?.content) {
-        event = { type: ClipboardContentType.TEXT, content: read.content }
+        if (
+          this.minClipboardLength > 0 &&
+          read.content.trim().length < this.minClipboardLength
+        ) {
+          return
+        }
+        event = {
+          type: ClipboardContentType.TEXT,
+          content: read.content,
+          sourceApp: sourceApp || undefined
+        }
         if (this.enableSmartDetection) {
           const detection = detectKey(read.content)
           if (detection.detected && detection.pattern) {
@@ -213,11 +258,19 @@ export class ClipboardMonitor extends EventEmitter {
         }
       }
     } else if (type === ClipboardContentType.IMAGE) {
+      if (!this.saveImages) {
+        logger.info('[ClipboardMonitor] image skipped (saveImages=false)')
+        return
+      }
       const image = clipboard.readImage()
       if (!image.isEmpty()) {
         const size = image.toJPEG(80).length / 1024
         if (size <= this.maxImageSize) {
-          event = { type: ClipboardContentType.IMAGE, imageData: image.toDataURL() }
+          event = {
+            type: ClipboardContentType.IMAGE,
+            imageData: image.toDataURL(),
+            sourceApp: sourceApp || undefined
+          }
         } else {
           logger.info(
             `[ClipboardMonitor] Image too large: ${size}KB > ${this.maxImageSize}KB`
@@ -227,7 +280,17 @@ export class ClipboardMonitor extends EventEmitter {
     } else if (type === ClipboardContentType.HTML) {
       const read = readClipboardByType(ClipboardContentType.HTML)
       if (read?.content) {
-        event = { type: ClipboardContentType.HTML, content: read.content }
+        if (
+          this.minClipboardLength > 0 &&
+          read.content.trim().length < this.minClipboardLength
+        ) {
+          return
+        }
+        event = {
+          type: ClipboardContentType.HTML,
+          content: read.content,
+          sourceApp: sourceApp || undefined
+        }
         if (this.enableSmartDetection) {
           const detection = detectKey(read.content)
           if (detection.detected && detection.pattern) {

@@ -45,7 +45,18 @@ export async function buildMixedDataCommands(): Promise<HudCommand[]> {
           title: c.name,
           subtitle: `凭证 · ${c.type}`,
           category: 'credential',
-          keywords: [c.name, c.type, '凭证', 'credential', ...(c.tags ?? [])],
+          keywords: [
+            c.name,
+            c.type,
+            '凭证',
+            'credential',
+            ...(c.tags ?? []),
+            // 拼音首字母由 fuzzy 在 title 上匹配；关键词补英文缩写
+            c.name
+              .split('')
+              .map((ch) => ch)
+              .join('')
+          ],
           Icon: KeyRound,
           perform: async () => {
             await api.credential.copy(c.id)

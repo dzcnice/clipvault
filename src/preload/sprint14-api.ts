@@ -8,7 +8,8 @@ import {
   UPDATER_CHANNELS,
   type UpdateChannel,
   type UpdateInfoPayload,
-  type UpdaterEvent
+  type UpdaterEvent,
+  type UpdaterDiagnostics
 } from '../types/updater'
 import {
   IMPORT_CHANNELS,
@@ -29,6 +30,10 @@ export const sprint14API = {
     getState: (): Promise<
       ApiResponse<UpdaterEvent & { channel: UpdateChannel }>
     > => ipcRenderer.invoke(UPDATER_CHANNELS.GET_STATE),
+    getDiagnostics: (): Promise<ApiResponse<UpdaterDiagnostics>> =>
+      ipcRenderer.invoke(UPDATER_CHANNELS.GET_DIAGNOSTICS),
+    openReleasePage: (): Promise<ApiResponse<boolean>> =>
+      ipcRenderer.invoke(UPDATER_CHANNELS.OPEN_RELEASE),
     onEvent: (cb: (ev: UpdaterEvent) => void): (() => void) => {
       const handler = (_ev: Electron.IpcRendererEvent, payload: UpdaterEvent): void =>
         cb(payload)

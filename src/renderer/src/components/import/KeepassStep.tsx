@@ -51,8 +51,8 @@ export function KeepassStep(): JSX.Element {
 
   const onCommit = useCallback(async () => {
     if (!result) return
-    const n = await commit(result.items)
-    setCommitted(n)
+    const r = await commit(result.items)
+    setCommitted(r?.count ?? null)
   }, [result, commit])
 
   return (

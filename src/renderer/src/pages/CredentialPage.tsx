@@ -12,24 +12,55 @@ import SearchBar from '../components/SearchBar'
 import { useConfirm } from '../components/ConfirmDialog'
 import { showPixelToast } from '../components/PixelToast'
 import type { Credential, CredentialFilter, CreateCredentialInput } from '@/types'
-import { CredentialSortBy, SortDirection } from '@/types'
+import { CredentialSortBy, CredentialType, SortDirection, getCredentialTypeMeta } from '@/types'
 
 type CredView = 'all' | 'favorites' | 'recent'
+
+const TYPE_CHIPS: Array<{ id: CredentialType | 'all'; label: string }> = [
+  { id: 'all', label: '全部类型' },
+  { id: CredentialType.API_KEY, label: 'API Key' },
+  { id: CredentialType.PASSWORD, label: '账号密码' },
+  { id: CredentialType.TOKEN, label: 'Token' },
+  { id: CredentialType.SSH_KEY, label: 'SSH' },
+  { id: CredentialType.DATABASE, label: '数据库' },
+  { id: CredentialType.CERTIFICATE, label: '证书' },
+  { id: CredentialType.OTHER, label: '其他' }
+]
 
 export default function CredentialPage(): JSX.Element {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [view, setView] = useState<CredView>('all')
+  const [typeFilter, setTypeFilter] = useState<CredentialType | 'all'>('all')
+  const [tagFilter, setTagFilter] = useState('')
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
+  const [categoryId, setCategoryId] = useState<string>('')
   const [selectedCredential, setSelectedCredential] = useState<Credential | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingCredential, setEditingCredential] = useState<Credential | null>(null)
   const confirm = useConfirm()
 
+  useEffect(() => {
+    void window.api.category
+      ?.list?.()
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          setCategories(res.data.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })))
+        }
+      })
+      .catch(() => {
+        /* optional */
+      })
+  }, [])
+
   const filter: CredentialFilter | undefined = useMemo(() => {
     const f: CredentialFilter = {}
     if (searchKeyword) f.keyword = searchKeyword
     if (view === 'favorites') f.favoritesOnly = true
+    if (typeFilter !== 'all') f.type = typeFilter
+    if (categoryId) f.categoryId = categoryId
+    if (tagFilter.trim()) f.tags = [tagFilter.trim()]
     return Object.keys(f).length ? f : undefined
-  }, [searchKeyword, view])
+  }, [searchKeyword, view, typeFilter, categoryId, tagFilter])
 
   const sortBy =
     view === 'recent' ? CredentialSortBy.LAST_USED : CredentialSortBy.UPDATED_AT
@@ -170,6 +201,54 @@ export default function CredentialPage(): JSX.Element {
                 {tab.label}
               </button>
             ))}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {TYPE_CHIPS.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                className={`cv-btn text-[10px] !px-1.5 !py-0.5 ${
+                  typeFilter === chip.id ? 'cv-btn-primary' : 'cv-btn-ghost'
+                }`}
+                onClick={() => {
+                  setTypeFilter(chip.id)
+                  setSelectedCredential(null)
+                }}
+                title={
+                  chip.id === 'all'
+                    ? '全部类型'
+                    : getCredentialTypeMeta(chip.id).label
+                }
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select
+              className="h-7 flex-1 rounded border bg-background px-1 text-[11px]"
+              value={categoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value)
+                setSelectedCredential(null)
+              }}
+            >
+              <option value="">全部分类</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="h-7 w-24 rounded border bg-background px-2 text-[11px]"
+              placeholder="标签"
+              value={tagFilter}
+              onChange={(e) => {
+                setTagFilter(e.target.value)
+                setSelectedCredential(null)
+              }}
+            />
           </div>
         </div>
 

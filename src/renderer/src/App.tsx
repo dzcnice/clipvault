@@ -23,6 +23,7 @@ const ClipboardPage = lazy(() => import('./pages/ClipboardPage'))
 const SnippetsPage = lazy(() => import('./pages/SnippetsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const HealthReportPage = lazy(() => import('./pages/HealthReportPage'))
+const TotpPage = lazy(() => import('./pages/TotpPage'))
 const AuditLogPage = lazy(() =>
   import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
 )
@@ -60,6 +61,18 @@ function EventBridge(): null {
     offs.push(
       window.api.events.on('shortcut:action', (action) => {
         logger.info('[shortcut] action received:', action)
+        if (action === 'ensure-open') {
+          void window.api.vault
+            .ensureOpen()
+            .then(() => showPixelToast('保险库已重新打开'))
+            .catch((err) => showPixelToast((err as Error).message || '开库失败'))
+          return
+        }
+        if (action === 'new-credential') {
+          navigateRef.current('/credentials')
+          openCommandPalette()
+          return
+        }
         openCommandPalette()
       })
     )
@@ -376,6 +389,7 @@ function App(): JSX.Element {
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="recovery" element={<RecoveryPage />} />
               <Route path="health" element={<HealthReportPage />} />
+              <Route path="totp" element={<TotpPage />} />
               <Route path="import" element={<ImportWizardPage />} />
               {/* 已下线功能：统一回剪贴板 / 设置 */}
               <Route path="share-packages" element={<Navigate to="/settings" replace />} />

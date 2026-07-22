@@ -89,6 +89,13 @@ export function updateTrayMenu(): void {
       }
     },
     {
+      label: 'TOTP 验证码',
+      click: () => {
+        showMainWindow()
+        mainWindow?.webContents.send('navigate', '/totp')
+      }
+    },
+    {
       label: '片段',
       click: () => {
         showMainWindow()
@@ -96,6 +103,13 @@ export function updateTrayMenu(): void {
       }
     },
     { type: 'separator' },
+    {
+      label: '重新打开保险库',
+      click: () => {
+        showMainWindow()
+        mainWindow?.webContents.send('shortcut:action', 'ensure-open')
+      }
+    },
     {
       label: '暂停剪贴板监听',
       type: 'checkbox',

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type {
   UpdateChannel,
   UpdateInfoPayload,
+  UpdaterDiagnostics,
   UpdaterEvent,
   UpdaterStatus
 } from '../../../types/updater'
@@ -23,6 +24,11 @@ interface UpdaterAPIShape {
     success: boolean
     data?: UpdaterEvent & { channel: UpdateChannel }
   }>
+  getDiagnostics?: () => Promise<{
+    success: boolean
+    data?: UpdaterDiagnostics
+  }>
+  openReleasePage?: () => Promise<{ success: boolean }>
   onEvent: (cb: (ev: UpdaterEvent) => void) => () => void
 }
 
@@ -46,6 +52,8 @@ export interface UseUpdaterState {
   download: () => Promise<boolean>
   quitAndInstall: () => Promise<void>
   setChannel: (c: UpdateChannel) => Promise<void>
+  getDiagnostics: () => Promise<UpdaterDiagnostics | null>
+  openReleasePage: () => Promise<void>
 }
 
 export function useUpdater(): UseUpdaterState {
@@ -127,6 +135,30 @@ export function useUpdater(): UseUpdaterState {
     }
   }, [])
 
+  const getDiagnostics = useCallback(async (): Promise<UpdaterDiagnostics | null> => {
+    const api = getApi()
+    if (!api?.getDiagnostics) return null
+    try {
+      const r = await api.getDiagnostics()
+      return r.success ? (r.data ?? null) : null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const openReleasePage = useCallback(async (): Promise<void> => {
+    const api = getApi()
+    if (!api?.openReleasePage) {
+      window.open('https://github.com/dzcnice/clipvault/releases', '_blank')
+      return
+    }
+    try {
+      await api.openReleasePage()
+    } catch {
+      window.open('https://github.com/dzcnice/clipvault/releases', '_blank')
+    }
+  }, [])
+
   return {
     status,
     info,
@@ -136,6 +168,8 @@ export function useUpdater(): UseUpdaterState {
     check,
     download,
     quitAndInstall,
-    setChannel
+    setChannel,
+    getDiagnostics,
+    openReleasePage
   }
 }

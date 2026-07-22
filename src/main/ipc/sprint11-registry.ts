@@ -28,7 +28,8 @@ import { parseOtpauthURI } from '../totp/otpauth-parser'
 import {
   upsertTOTP,
   getTOTP,
-  deleteTOTP
+  deleteTOTP,
+  listAllTOTP
 } from '../../db/credential-totp-store'
 import {
   generateStrong,
@@ -97,6 +98,17 @@ export function registerSprint11IPC(
           success: true,
           data: getTOTP(payload?.credentialId ?? '')
         }
+      } catch (err) {
+        return { success: false, error: (err as Error).message }
+      }
+    })
+  )
+
+  ipcMain.handle(
+    SPRINT11_CHANNELS.TOTP_LIST,
+    wrapHandler(async (): Promise<ApiResponse<Array<TOTPConfig & { credentialName: string }>>> => {
+      try {
+        return { success: true, data: listAllTOTP() }
       } catch (err) {
         return { success: false, error: (err as Error).message }
       }

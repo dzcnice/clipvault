@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Scissors,
   Settings,
+  Timer,
   type LucideIcon
 } from 'lucide-react'
 
@@ -32,6 +33,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const SECONDARY_NAV: NavItem[] = [
   { path: '/dashboard', label: '概览', icon: LayoutDashboard },
+  { path: '/totp', label: 'TOTP', icon: Timer, hint: '验证码总览' },
   { path: '/health', label: '健康', icon: Activity },
   { path: '/settings', label: '设置', icon: Settings }
 ]

@@ -4,6 +4,7 @@
 
 import { useCallback, useState } from 'react'
 import type {
+  GenericCsvMapping,
   ImportParseResult,
   ImportRequest,
   ImportSource
@@ -15,7 +16,11 @@ interface ImportAPIShape {
   ) => Promise<{ success: boolean; data?: ImportParseResult; error?: string }>
   commit: (
     items: ImportParseResult['items']
-  ) => Promise<{ success: boolean; data?: { count: number }; error?: string }>
+  ) => Promise<{
+    success: boolean
+    data?: { count: number; skipped: number }
+    error?: string
+  }>
 }
 
 function getApi(): ImportAPIShape | null {
@@ -35,9 +40,11 @@ export interface UseImportState {
   parse: (
     source: ImportSource,
     content: string,
-    opts?: { base64?: boolean; password?: string }
+    opts?: { base64?: boolean; password?: string; mapping?: GenericCsvMapping }
   ) => Promise<ImportParseResult | null>
-  commit: (items: ImportParseResult['items']) => Promise<number>
+  commit: (
+    items: ImportParseResult['items']
+  ) => Promise<{ count: number; skipped: number } | null>
   reset: () => void
 }
 
@@ -62,7 +69,8 @@ export function useImport(): UseImportState {
           source,
           content,
           base64: opts?.base64,
-          password: opts?.password
+          password: opts?.password,
+          mapping: opts?.mapping
         })
         if (!r.success) {
           setError(r.error ?? '解析失败')
@@ -82,15 +90,21 @@ export function useImport(): UseImportState {
 
   const commit = useCallback<UseImportState['commit']>(async (items) => {
     const api = getApi()
-    if (!api) return 0
+    if (!api) return null
     setBusy(true)
-    // ρ3：补 catch，失败时回 0 让 UI 感知
     try {
       const r = await api.commit(items)
-      return r.data?.count ?? 0
+      if (!r.success) {
+        setError(r.error ?? '导入失败')
+        return null
+      }
+      return {
+        count: r.data?.count ?? 0,
+        skipped: r.data?.skipped ?? 0
+      }
     } catch (err) {
       setError((err as Error).message ?? '导入失败')
-      return 0
+      return null
     } finally {
       setBusy(false)
     }

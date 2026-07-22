@@ -210,8 +210,8 @@ export async function addClipboardItem(input: any, detectedKeyType: any = undefi
       previewCipher,
       previewNonce
     );
-    // 清理超出限制的旧记录（含图片 TTL）
-    cleanupOldHistory();
+    // 清理超出限制的旧记录（含图片 TTL）；上限读 prefs
+    cleanupOldHistory(resolveMaxHistorySize());
     return getClipboardItemById(id);
 }
 /** 获取单个剪贴板项 */
@@ -254,6 +254,10 @@ export function listClipboardHistory(filter: any = undefined, limit: any = 100, 
         if (filter.endTime) {
             whereClause += ' AND created_at <= ?';
             params.push(filter.endTime);
+        }
+        if (filter.sourceApp) {
+            whereClause += ' AND source_app = ?';
+            params.push(filter.sourceApp);
         }
         if (filter.tags && filter.tags.length > 0) {
             const tagPlaceholders = filter.tags.map(() => '?').join(',');
@@ -334,6 +338,54 @@ export function deleteClipboardItem(id: any): any {
     }
     const result = db.prepare('DELETE FROM clipboard_history WHERE id = ?').run(id);
     return result.changes > 0;
+}
+/** 批量删除（跳过片段；置顶也可删，由调用方筛选） */
+export function deleteClipboardItems(ids: any): any {
+    if (!Array.isArray(ids) || ids.length === 0) return 0;
+    let n = 0;
+    for (const id of ids) {
+        if (typeof id !== 'string' || !id) continue;
+        if (deleteClipboardItem(id)) n++;
+    }
+    return n;
+}
+/**
+ * 删除早于 cutoffMs 的非片段历史。
+ * keepPinned=true 时保留置顶。
+ */
+export function deleteClipboardOlderThan(cutoffMs: any, keepPinned = true): any {
+    const db = getDatabase();
+    const cutoff = typeof cutoffMs === 'number' && Number.isFinite(cutoffMs) ? cutoffMs : 0;
+    if (cutoff <= 0) return 0;
+    let sql =
+        'SELECT id, image_path FROM clipboard_history WHERE is_snippet = 0 AND created_at < ?';
+    if (keepPinned) sql += ' AND is_pinned = 0';
+    const rows = db.prepare(sql).all(cutoff);
+    if (!rows.length) return 0;
+    const ids = rows.map((r) => r.id);
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM clipboard_history WHERE id IN (${placeholders})`).run(...ids);
+    for (const r of rows) {
+        if (r.image_path) imageStore.deleteImageFile(r.image_path);
+    }
+    return ids.length;
+}
+/** 批量置顶 / 取消置顶 */
+export function setClipboardPinned(ids: any, pinned: any): any {
+    if (!Array.isArray(ids) || ids.length === 0) return 0;
+    const db = getDatabase();
+    const val = pinned ? 1 : 0;
+    const now = pinned ? Date.now() : null;
+    let n = 0;
+    const stmt = db.prepare(
+        'UPDATE clipboard_history SET is_pinned = ?, pinned_at = ? WHERE id = ? AND is_snippet = 0'
+    );
+    for (const id of ids) {
+        if (typeof id !== 'string' || !id) continue;
+        const r = stmt.run(val, now, id);
+        n += r.changes;
+    }
+    return n;
 }
 /** 清空剪贴板历史（保留置顶和快速片段） */
 export function clearClipboardHistory(): any {
@@ -479,6 +531,21 @@ const MAX_HISTORY_DEFAULT = 500;
 const MAX_PINNED = 200;
 const IMAGE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const NON_IMAGE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function resolveMaxHistorySize(): number {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getPrefs } = require('../main/prefs') as {
+            getPrefs: () => { maxHistorySize?: number };
+        };
+        const n = getPrefs()?.maxHistorySize;
+        if (typeof n === 'number' && n >= 50 && n <= 5000) return Math.floor(n);
+    } catch {
+        /* prefs 未就绪时走默认 */
+    }
+    return MAX_HISTORY_DEFAULT;
+}
+
 /**
  * 清理超出限制的旧历史记录 + 置顶条数上限 + 图片 TTL
  */

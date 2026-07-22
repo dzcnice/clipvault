@@ -106,6 +106,10 @@ export interface ClipboardFilter {
   startTime?: number
   /** 时间范围 - 结束 */
   endTime?: number
+  /** 来源应用（精确匹配进程名） */
+  sourceApp?: string
+  /** 折叠重复 hash（列表侧提示用，SQL 仍返回全量；渲染端可折叠） */
+  collapseDuplicates?: boolean
 }
 
 /** 剪贴板监听器状态 */

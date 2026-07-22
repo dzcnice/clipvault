@@ -2,6 +2,22 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.2.0] - 2026-07-22
+
+### Added
+- 剪贴板可控：历史上限、排除应用、最短文本、保存图片、来源应用、批量/时间清理、折叠重复
+- 凭证：类型/分类/标签筛选；复制用户名/用户名→密码/复制并粘贴；默认遮罩；生物识别门禁
+- **TOTP 总览页**（侧栏 + 托盘）
+- 片段：编辑、变量 chips、**全局热键**（Electron accelerator 格式）
+- 导入：通用 CSV 列映射；导出：字段勾选 + 时间范围 + 生物识别
+- 更新：自动检查/间隔/诊断/发布页；快捷键改键+冲突检测
+- Onboarding：可选恢复短语步；托盘「重新打开保险库」
+- HUD 拼音首字母；健康报告可跳转
+
+### Notes
+- 仍为 v3 个人本地版；Windows 代码签名仍依赖外部证书
+- `paste-to-active` 仅 Windows（接口已冻结，其它平台返回明确错误）
+
 ## [3.1.2] - 2026-07-21
 
 ### Added

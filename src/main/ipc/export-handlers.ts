@@ -33,6 +33,18 @@ export interface ExportIpcOptions {
   jsonMode?: ExportMode
   /** A-1：jsonMode==='encrypted' 时必填 */
   exportPassword?: string
+  /** 凭证字段（目标形态）：不选 value 时强制脱敏 */
+  credentialFields?: {
+    value?: boolean
+    description?: boolean
+    tags?: boolean
+    metadata?: boolean
+    timestamps?: boolean
+  }
+  /** 仅导出此时间之后创建的凭证（ms epoch） */
+  credentialsSince?: number
+  /** 仅导出此时间之后的剪贴板 */
+  clipboardSince?: number
 }
 
 export function registerExportHandlers(mainWindow: BrowserWindow): void {
@@ -40,15 +52,56 @@ export function registerExportHandlers(mainWindow: BrowserWindow): void {
     IPC_CHANNELS.EXPORT_DIALOG,
     wrapUnlockedHandler(async (_event, options: ExportIpcOptions): Promise<ApiResponse<string>> => {
       try {
-        const credentials = options.includeCredentials
+        // 生物识别门禁（目标形态）
+        const { confirmSensitiveAction } = await import('../biometric/confirm')
+        const bio = await confirmSensitiveAction('export', 'ClipVault：确认导出数据')
+        if (!bio.ok) {
+          return { success: false, error: bio.error || '生物识别未通过' }
+        }
+
+        let credentials = options.includeCredentials
           ? listCredentials({}).items
           : undefined
-        const clipboardItems = options.includeClipboard
-          ? listClipboardHistory({}).items
+        let clipboardItems = options.includeClipboard
+          ? listClipboardHistory(undefined, 5000).items
           : undefined
         const categories = options.includeCategories
           ? listCategories()
           : undefined
+
+        if (credentials && options.credentialsSince) {
+          const since = options.credentialsSince
+          credentials = credentials.filter((c: { createdAt: number }) => c.createdAt >= since)
+        }
+        if (clipboardItems && options.clipboardSince) {
+          const since = options.clipboardSince
+          clipboardItems = clipboardItems.filter(
+            (c: { createdAt: number }) => c.createdAt >= since
+          )
+        }
+
+        // 字段裁剪（目标结构：永远是 Credential 形状，未选字段置空）
+        const fields = options.credentialFields
+        if (credentials && fields) {
+          credentials = credentials.map(
+            (c: {
+              value: string
+              description?: string
+              tags: string[]
+              metadata: Record<string, unknown>
+              createdAt: number
+              updatedAt: number
+            }) => ({
+              ...c,
+              value: fields.value === false ? '' : c.value,
+              description: fields.description === false ? undefined : c.description,
+              tags: fields.tags === false ? [] : c.tags,
+              metadata: fields.metadata === false ? {} : c.metadata,
+              createdAt: fields.timestamps === false ? 0 : c.createdAt,
+              updatedAt: fields.timestamps === false ? 0 : c.updatedAt
+            })
+          )
+        }
 
         let content: string
         let defaultPath: string
@@ -56,8 +109,10 @@ export function registerExportHandlers(mainWindow: BrowserWindow): void {
         if (options.format === 'json') {
           const base = createExportData(credentials, clipboardItems, categories)
           const mode: ExportMode = options.jsonMode ?? 'plain'
+          // 未勾选 value 时强制 plain 脱敏路径再清一次
+          const forceNoValue = fields?.value === false
 
-          if (mode === 'encrypted') {
+          if (mode === 'encrypted' && !forceNoValue) {
             if (!options.exportPassword) {
               return { success: false, error: '加密模式需要提供导出密码' }
             }
@@ -70,7 +125,6 @@ export function registerExportHandlers(mainWindow: BrowserWindow): void {
             defaultPath = generateExportFileName('json')
           }
         } else {
-          // CSV 格式只导出凭证或剪贴板
           if (options.includeCredentials && credentials) {
             content = exportCredentialsToCsv(credentials)
             defaultPath = generateExportFileName('csv', 'credentials')

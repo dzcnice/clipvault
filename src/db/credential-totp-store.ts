@@ -134,3 +134,48 @@ export function hasTOTP(credentialId: string): boolean {
     .get(credentialId)
   return !!row
 }
+
+/** 列表项：含凭证名，secret 仅 vault 解锁时可解密 */
+export interface TOTPListItem extends TOTPConfig {
+  credentialName: string
+}
+
+/**
+ * 列出全部 TOTP（目标形态：一页总览用）。
+ * vault 未解锁时仍返回元数据但 secret 为空串，generate 会失败直至解锁。
+ */
+export function listAllTOTP(): TOTPListItem[] {
+  const db = getDatabase()
+  const rows = db
+    .prepare(
+      `SELECT t.*, c.name AS credential_name
+       FROM credential_totp t
+       LEFT JOIN credentials c ON c.id = t.credential_id
+       ORDER BY c.name COLLATE NOCASE ASC`
+    )
+    .all() as Array<TOTPRow & { credential_name: string | null }>
+
+  const unlocked = vault.isUnlocked()
+  return rows.map((row) => {
+    let secret = ''
+    if (unlocked) {
+      try {
+        secret = vault.decryptWithDEK(row.secret_encrypted)
+      } catch {
+        secret = ''
+      }
+    }
+    return {
+      credentialId: row.credential_id,
+      credentialName: row.credential_name || row.credential_id,
+      secret,
+      issuer: row.issuer ?? undefined,
+      account: row.account ?? undefined,
+      algorithm: (row.algorithm as TOTPAlgorithm) || 'SHA1',
+      digits: (row.digits === 8 ? 8 : 6) as 6 | 8,
+      period: row.period || 30,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  })
+}

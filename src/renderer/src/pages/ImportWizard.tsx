@@ -11,18 +11,27 @@ import { BitwardenStep } from '@renderer/components/import/BitwardenStep'
 import { KeepassStep } from '@renderer/components/import/KeepassStep'
 import { ChromeStep } from '@renderer/components/import/ChromeStep'
 import { LastpassStep } from '@renderer/components/import/LastpassStep'
+import { GenericCsvStep } from '@renderer/components/import/GenericCsvStep'
 
-type Tab = 'onepassword' | 'bitwarden' | 'chrome' | 'lastpass' | 'keepass'
+type Tab = 'onepassword' | 'bitwarden' | 'chrome' | 'lastpass' | 'keepass' | 'generic'
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'onepassword', label: '1Password (.1pux)' },
   { key: 'bitwarden', label: 'Bitwarden (JSON)' },
   { key: 'chrome', label: 'Chrome (CSV)' },
   { key: 'lastpass', label: 'LastPass (CSV)' },
-  { key: 'keepass', label: 'KeePass (.kdbx)' }
+  { key: 'keepass', label: 'KeePass (.kdbx)' },
+  { key: 'generic', label: '通用 CSV' }
 ]
 
-const VALID_TABS: readonly Tab[] = ['onepassword', 'bitwarden', 'chrome', 'lastpass', 'keepass']
+const VALID_TABS: readonly Tab[] = [
+  'onepassword',
+  'bitwarden',
+  'chrome',
+  'lastpass',
+  'keepass',
+  'generic'
+]
 
 export function ImportWizard(): JSX.Element {
   const location = useLocation()
@@ -82,6 +91,7 @@ export function ImportWizard(): JSX.Element {
         {tab === 'chrome' && <ChromeStep />}
         {tab === 'lastpass' && <LastpassStep />}
         {tab === 'keepass' && <KeepassStep />}
+        {tab === 'generic' && <GenericCsvStep />}
       </section>
     </div>
   )

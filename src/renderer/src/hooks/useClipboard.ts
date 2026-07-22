@@ -12,6 +12,7 @@ import type {
   ClipboardItem,
   ClipboardFilter,
   CreateSnippetInput,
+  UpdateSnippetInput,
   WorkspaceContext
 } from '@/types'
 
@@ -323,12 +324,31 @@ export function useSnippets(options: { workspace?: WorkspaceContext } = {}) {
     [refresh]
   )
 
+  const updateSnippet = useCallback(
+    async (input: UpdateSnippetInput): Promise<ClipboardItem | null> => {
+      try {
+        const response = await window.api.clipboard.updateSnippet(input)
+        if (response.success && response.data) {
+          await refresh()
+          return response.data
+        }
+        setError(response.error || '更新片段失败')
+        return null
+      } catch (err) {
+        setError((err as Error).message)
+        return null
+      }
+    },
+    [refresh]
+  )
+
   return {
     snippets,
     loading,
     error,
     refresh,
     createSnippet,
+    updateSnippet,
     copySnippet,
     deleteSnippet
   }

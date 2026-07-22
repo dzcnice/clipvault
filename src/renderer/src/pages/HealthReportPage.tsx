@@ -71,7 +71,28 @@ export const HealthReportPage: React.FC = () => {
                     key={idx}
                     style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}
                   >
-                    <td style={{ padding: 8 }}>{i.credentialName}</td>
+                    <td style={{ padding: 8 }}>
+                      <button
+                        type="button"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary, #b8860b)',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0,
+                          font: 'inherit'
+                        }}
+                        title="去凭证页处理"
+                        onClick={() => {
+                          window.location.hash = `#/credentials?highlight=${encodeURIComponent(
+                            i.credentialId ?? i.credentialName
+                          )}`
+                        }}
+                      >
+                        {i.credentialName}
+                      </button>
+                    </td>
                     <td style={{ padding: 8 }}>{i.type}</td>
                     <td
                       style={{

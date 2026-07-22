@@ -10,7 +10,7 @@ import * as clipboardStore from '../../db/clipboard-store'
 import { getClipboardMonitor, ClipboardChangeEvent } from '../clipboard/monitor'
 import { wrapHandler, wrapUnlockedHandler } from './utils'
 import { logger } from '../utils/logger'
-import { getImagePasteMode } from '../prefs'
+import { getImagePasteMode, getPrefs, setPrefs } from '../prefs'
 import type {
   ClipboardFilter,
   ClipboardItem,
@@ -35,6 +35,16 @@ function imageModeLabel(mode: string): string {
 export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
   const monitor = getClipboardMonitor()
 
+  // 启动时同步 prefs → monitor
+  const initialPrefs = getPrefs()
+  monitor.updateSettings({
+    maxImageSize: initialPrefs.maxImageSizeKb,
+    enableSmartDetection: initialPrefs.enableSmartDetection,
+    saveImages: initialPrefs.saveImages,
+    excludedApps: initialPrefs.excludedApps,
+    minClipboardLength: initialPrefs.minClipboardLength
+  })
+
   // 监听剪贴板变化，保存到数据库并通知渲染进程（始终 personal）
   monitor.on('change', async (event: ClipboardChangeEvent) => {
     try {
@@ -43,7 +53,8 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
           type: event.type,
           content: event.content,
           imageData: event.imageData,
-          filePath: event.filePath
+          filePath: event.filePath,
+          sourceApp: event.sourceApp
         },
         event.detectedKeyType,
         'personal'
@@ -122,12 +133,74 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
     wrapHandler(async (_event, id: string): Promise<ApiResponse<boolean>> => {
       try {
         const success = clipboardStore.deleteClipboardItem(id)
+        try {
+          const { refreshSnippetHotkeys } = await import('../shortcuts/snippet-hotkeys')
+          refreshSnippetHotkeys()
+        } catch {
+          /* ignore */
+        }
         return { success, data: success }
       } catch (error) {
         logger.error('[IPC] Error deleting clipboard item:', error)
         return { success: false, error: (error as Error).message }
       }
     })
+  )
+
+  // 批量删除
+  ipcMain.handle(
+    IPC_CHANNELS.CLIPBOARD_DELETE_ITEMS,
+    wrapHandler(async (_event, ids: string[]): Promise<ApiResponse<number>> => {
+      try {
+        const n = clipboardStore.deleteClipboardItems(ids ?? [])
+        return { success: true, data: n }
+      } catch (error) {
+        logger.error('[IPC] Error batch deleting clipboard items:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    })
+  )
+
+  // 按时间清理（早于 cutoffMs 的非片段）
+  ipcMain.handle(
+    IPC_CHANNELS.CLIPBOARD_DELETE_OLDER,
+    wrapHandler(
+      async (
+        _event,
+        opts: { olderThanMs: number; keepPinned?: boolean }
+      ): Promise<ApiResponse<number>> => {
+        try {
+          const cutoff = Date.now() - (opts?.olderThanMs ?? 0)
+          const n = clipboardStore.deleteClipboardOlderThan(
+            cutoff,
+            opts?.keepPinned !== false
+          )
+          return { success: true, data: n }
+        } catch (error) {
+          logger.error('[IPC] Error delete older clipboard:', error)
+          return { success: false, error: (error as Error).message }
+        }
+      }
+    )
+  )
+
+  // 批量置顶
+  ipcMain.handle(
+    IPC_CHANNELS.CLIPBOARD_BATCH_PIN,
+    wrapHandler(
+      async (
+        _event,
+        opts: { ids: string[]; pinned: boolean }
+      ): Promise<ApiResponse<number>> => {
+        try {
+          const n = clipboardStore.setClipboardPinned(opts?.ids ?? [], opts?.pinned)
+          return { success: true, data: n }
+        } catch (error) {
+          logger.error('[IPC] Error batch pin:', error)
+          return { success: false, error: (error as Error).message }
+        }
+      }
+    )
   )
 
   // 切换置顶状态
@@ -223,6 +296,12 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
       try {
         const workspace = normalizeWorkspace(input.workspace)
         const snippet = clipboardStore.createSnippet(input, workspace)
+        try {
+          const { refreshSnippetHotkeys } = await import('../shortcuts/snippet-hotkeys')
+          refreshSnippetHotkeys()
+        } catch {
+          /* ignore */
+        }
         return { success: true, data: snippet }
       } catch (error) {
         logger.error('[IPC] Error creating snippet:', error)
@@ -239,6 +318,12 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         const snippet = clipboardStore.updateSnippet(input)
         if (!snippet) {
           return { success: false, error: '片段不存在' }
+        }
+        try {
+          const { refreshSnippetHotkeys } = await import('../shortcuts/snippet-hotkeys')
+          refreshSnippetHotkeys()
+        } catch {
+          /* ignore */
         }
         return { success: true, data: snippet }
       } catch (error) {
@@ -298,6 +383,7 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         } else {
           monitor.stop()
         }
+        setPrefs({ clipboardMonitorEnabled: enabled })
         return { success: true, data: enabled }
       } catch (error) {
         logger.error('[IPC] Error toggling monitor:', error)
@@ -306,8 +392,21 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
     })
   )
 
-  // 启动剪贴板监听
-  monitor.start()
+  // 按偏好启动剪贴板监听
+  if (initialPrefs.clipboardMonitorEnabled) {
+    monitor.start()
+  }
+
+  // 片段全局热键
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { refreshSnippetHotkeys } = require('../shortcuts/snippet-hotkeys') as {
+      refreshSnippetHotkeys: () => void
+    }
+    refreshSnippetHotkeys()
+  } catch (err) {
+    logger.warn('[IPC] snippet hotkeys init skipped:', err)
+  }
 
   logger.info('[IPC] Clipboard handlers registered')
 }
