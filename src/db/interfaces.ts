@@ -37,7 +37,8 @@ export interface ICredentialRepository {
     sortDir?: SortDirection,
     limit?: number,
     offset?: number,
-    workspace?: WorkspaceContext
+    workspace?: WorkspaceContext,
+    includeSecrets?: boolean
   ): { items: Credential[]; total: number }
   recordCredentialUsage(id: string): void
   getAllTags(): Tag[]

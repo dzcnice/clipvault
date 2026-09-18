@@ -39,10 +39,10 @@ export interface RecoveryResetResult {
 }
 
 export const RECOVERY_CHANNELS = {
-  STATUS: 'sprint13:recovery-status',
-  SETUP: 'sprint13:recovery-setup',
-  CHALLENGE: 'sprint13:recovery-challenge',
-  VERIFY: 'sprint13:recovery-verify',
-  RESET_PASSWORD: 'sprint13:recovery-reset-password',
-  DISABLE: 'sprint13:recovery-disable'
+  STATUS: 'security:recovery-status',
+  SETUP: 'security:recovery-setup',
+  CHALLENGE: 'security:recovery-challenge',
+  VERIFY: 'security:recovery-verify',
+  RESET_PASSWORD: 'security:recovery-reset-password',
+  DISABLE: 'security:recovery-disable'
 } as const

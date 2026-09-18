@@ -70,29 +70,24 @@ export interface OtpauthParseResult {
   period: number
 }
 
-/** Sprint 11 IPC 通道 */
-export const SPRINT11_CHANNELS = {
-  // TOTP
-  TOTP_UPSERT: 'sprint11:totp-upsert',
-  TOTP_DELETE: 'sprint11:totp-delete',
-  TOTP_GET: 'sprint11:totp-get',
-  TOTP_LIST: 'sprint11:totp-list',
-  TOTP_GENERATE: 'sprint11:totp-generate',
-  TOTP_PARSE_URI: 'sprint11:totp-parse-uri',
+/** TOTP / 密码生成 / 健康 / 预览 IPC 通道 */
+export const TOOLS_CHANNELS = {
+  TOTP_UPSERT: 'totp:upsert',
+  TOTP_DELETE: 'totp:delete',
+  TOTP_GET: 'totp:get',
+  TOTP_LIST: 'totp:list',
+  TOTP_GENERATE: 'totp:generate',
+  TOTP_PARSE_URI: 'totp:parse-uri',
 
-  // Password generator
-  PASSWORD_GENERATE_STRONG: 'sprint11:password-generate-strong',
-  PASSWORD_GENERATE_PASSPHRASE: 'sprint11:password-generate-passphrase',
-  PASSWORD_GENERATE_PIN: 'sprint11:password-generate-pin',
-  PASSWORD_EVALUATE_STRENGTH: 'sprint11:password-evaluate-strength',
+  PASSWORD_GENERATE_STRONG: 'password:generate-strong',
+  PASSWORD_GENERATE_PASSPHRASE: 'password:generate-passphrase',
+  PASSWORD_GENERATE_PIN: 'password:generate-pin',
+  PASSWORD_EVALUATE_STRENGTH: 'password:evaluate-strength',
 
-  // Health
-  HEALTH_REPORT: 'sprint11:health-report',
-  HEALTH_CHECK_HIBP: 'sprint11:health-check-hibp',
+  HEALTH_REPORT: 'health:report',
+  HEALTH_CHECK_HIBP: 'health:check-hibp',
 
-  // Preview
-  PREVIEW_FETCH_URL_META: 'sprint11:preview-fetch-url-meta'
+  PREVIEW_FETCH_URL_META: 'preview:fetch-url-meta'
 } as const
 
-export type Sprint11Channel =
-  (typeof SPRINT11_CHANNELS)[keyof typeof SPRINT11_CHANNELS]
+export type ToolsChannel = (typeof TOOLS_CHANNELS)[keyof typeof TOOLS_CHANNELS]

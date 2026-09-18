@@ -45,13 +45,13 @@ export interface AutoClearStatus {
   ttlMs: number
 }
 
-/** Sprint 13 IPC 通道（独立命名空间，便于整合人接线） */
-export const SPRINT13_CHANNELS = {
-  AUTO_CLEAR_SCHEDULE: 'sprint13:auto-clear-schedule',
-  AUTO_CLEAR_CANCEL: 'sprint13:auto-clear-cancel',
-  AUTO_CLEAR_STATUS: 'sprint13:auto-clear-status',
-  AUTO_CLEAR_EVENT: 'sprint13:auto-clear-event',
-  SCREEN_PROTECT_ENABLE: 'sprint13:screen-protect-enable',
-  SCREEN_PROTECT_DISABLE: 'sprint13:screen-protect-disable',
-  SCREEN_PROTECT_STATUS: 'sprint13:screen-protect-status'
+/** 自动清空 / 屏幕保护 IPC 通道 */
+export const SECURITY_CHANNELS = {
+  AUTO_CLEAR_SCHEDULE: 'security:auto-clear-schedule',
+  AUTO_CLEAR_CANCEL: 'security:auto-clear-cancel',
+  AUTO_CLEAR_STATUS: 'security:auto-clear-status',
+  AUTO_CLEAR_EVENT: 'security:auto-clear-event',
+  SCREEN_PROTECT_ENABLE: 'security:screen-protect-enable',
+  SCREEN_PROTECT_DISABLE: 'security:screen-protect-disable',
+  SCREEN_PROTECT_STATUS: 'security:screen-protect-status'
 } as const

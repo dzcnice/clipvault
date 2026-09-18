@@ -1,5 +1,5 @@
 /**
- * Sprint 14 · TASK-074 / 075 第三方导入类型
+ * 第三方凭证导入类型
  */
 
 export type ImportSource =

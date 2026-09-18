@@ -37,6 +37,8 @@ export const IPC_CHANNELS = {
   CLIPBOARD_COPY_ITEM: 'clipboard:copyItem',
   /** 复制图片磁盘路径为文本（便于终端/CLI 粘贴） */
   CLIPBOARD_COPY_PATH: 'clipboard:copyPath',
+  /** 列表项缩略图（小 JPEG Data URL） */
+  CLIPBOARD_GET_THUMBNAIL: 'clipboard:getThumbnail',
   CLIPBOARD_CREATE_SNIPPET: 'clipboard:createSnippet',
   CLIPBOARD_UPDATE_SNIPPET: 'clipboard:updateSnippet',
   CLIPBOARD_GET_SNIPPETS: 'clipboard:getSnippets',
@@ -90,7 +92,6 @@ export const IPC_CHANNELS = {
   // 系统
   APP_GET_AUTO_LAUNCH: 'app:getAutoLaunch',
   APP_SET_AUTO_LAUNCH: 'app:setAutoLaunch',
-  SYSTEM_OPEN_FIREWALL_SETTINGS: 'system:open-firewall-settings',
   SYSTEM_GET_VERSION: 'system:get-version',
 
   // 快捷键

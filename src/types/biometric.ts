@@ -1,9 +1,9 @@
 /**
- * Sprint 13 / TASK-067 生物识别解锁类型
+ * 生物识别 / 会话确认类型
  *
- * - Windows：safeStorage (DPAPI) 包装 DEK，不走 Windows Hello API（Electron 31
- *   不直接暴露 Hello），同等可信级别由 DPAPI 提供
- * - macOS：systemPreferences.promptTouchID 进行身份确认 + safeStorage 保护 DEK
+ * - Windows：safeStorage (DPAPI) 包装 DEK。Electron 不弹 Windows Hello UI，
+ *   确认等于「当前用户会话能解开已注册的 DEK」
+ * - macOS：systemPreferences.promptTouchID + safeStorage 保护 DEK
  * - Linux：不支持（isAvailable=false）
  */
 
@@ -32,8 +32,8 @@ export interface BiometricUnlockResult {
 }
 
 export const BIOMETRIC_CHANNELS = {
-  AVAILABILITY: 'sprint13:biometric-availability',
-  ENROLL: 'sprint13:biometric-enroll',
-  UNLOCK: 'sprint13:biometric-unlock',
-  DISABLE: 'sprint13:biometric-disable'
+  AVAILABILITY: 'security:biometric-availability',
+  ENROLL: 'security:biometric-enroll',
+  UNLOCK: 'security:biometric-unlock',
+  DISABLE: 'security:biometric-disable'
 } as const

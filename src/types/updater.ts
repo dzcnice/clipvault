@@ -1,5 +1,5 @@
 /**
- * Sprint 14 · TASK-072 AutoUpdater 类型
+ * 自动更新类型
  */
 
 export type UpdateChannel = 'stable' | 'beta'
@@ -34,6 +34,12 @@ export interface UpdaterEvent {
   error?: string
 }
 
+/** getState 载荷：状态 + 通道 + 是否已打包 */
+export type UpdaterStatePayload = UpdaterEvent & {
+  channel: UpdateChannel
+  packaged: boolean
+}
+
 /** 更新诊断（C2） */
 export interface UpdaterDiagnostics {
   appVersion: string
@@ -46,6 +52,8 @@ export interface UpdaterDiagnostics {
   intervalHours: number
   platform: string
   feedUrlHint: string
+  /** false = npm run dev / unpackaged，electron-updater 不会真正检查 */
+  packaged: boolean
 }
 
 export const UPDATER_CHANNELS = {

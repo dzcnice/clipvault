@@ -1,7 +1,5 @@
 /**
- * HUD (Heads-Up Display) 类型定义（v2.0 Sprint 6）
- *
- * HUD = Alt+Space 召唤的命令面板独立窗口
+ * HUD（命令面板独立窗口）类型
  */
 
 /** HUD IPC 通道名 */

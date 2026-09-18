@@ -47,8 +47,8 @@ export interface RecordAuditInput {
 }
 
 export const AUDIT_CHANNELS = {
-  RECORD: 'sprint13:audit-record',
-  LIST: 'sprint13:audit-list',
-  EXPORT_CSV: 'sprint13:audit-export-csv',
-  CLEAR: 'sprint13:audit-clear'
+  RECORD: 'security:audit-record',
+  LIST: 'security:audit-list',
+  EXPORT_CSV: 'security:audit-export-csv',
+  CLEAR: 'security:audit-clear'
 } as const
