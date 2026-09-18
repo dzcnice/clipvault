@@ -14,10 +14,8 @@
   <true/>
   <key>com.apple.security.files.downloads.read-write</key>
   <true/>
-  <!-- 网络（DeepSeek / 自动更新 / 局域网 P2P）-->
+  <!-- 网络：检查更新 / HIBP（无 P2P 服务端）-->
   <key>com.apple.security.network.client</key>
-  <true/>
-  <key>com.apple.security.network.server</key>
   <true/>
   <!-- 剪贴板 -->
   <key>com.apple.security.device.clipboard</key>

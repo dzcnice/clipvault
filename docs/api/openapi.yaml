@@ -3,8 +3,8 @@ info:
   title: ClipVault Local HTTP API
   version: 1.0.0
   description: |
-    本地守护 HTTP API，仅绑定 127.0.0.1；需 Bearer token 鉴权；
-    响应绝不包含明文 credential value。
+    【已下线】ClipVault v3 个人版不再提供本地 HTTP API。
+    本文档仅作历史存档。
 servers:
   - url: http://127.0.0.1:7424
     description: Default local port (fallback +1 when busy)

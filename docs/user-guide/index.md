@@ -1,27 +1,26 @@
 # ClipVault 用户手册
 
-欢迎使用 ClipVault v2.0！本手册包含入门指南、功能说明与安全最佳实践。
-
-> 提示：本手册随应用内置，也可在 [GitHub 在线版](https://clipvault.example/docs)阅读。
+欢迎使用 ClipVault **v3 个人本地版**：凭证与剪贴板都只存在本机，没有云同步、没有团队、没有 AI 助手。
 
 ## 目录
 
 | 章节 | 描述 |
 |------|------|
-| [快速开始](./quick-start.md) | 5 分钟完成首次安装、设主密码、备份恢复短语 |
-| [快捷键参考](./shortcuts.md) | 全局 / 应用内 / HUD 所有快捷键 |
-| [Vera AI 助手](./vera.md) | 三层权限、占位符脱敏、模型配置 |
-| [团队协作](./team.md) | P2P 配对、共享凭证、CRDT 同步 |
-| [安全与加密](./security.md) | 两层密钥、威胁模型、反截屏 |
-| [导入导出](./import-export.md) | 从 1Password/Bitwarden/Chrome/LastPass 迁移 |
+| [快速开始](./quick-start.md) | 安装、首次启动、本机开库 |
+| [快捷键参考](./shortcuts.md) | 全局 / 应用内 / HUD |
+| [安全与加密](./security.md) | 威胁模型、safeStorage、恢复短语 |
+| [导入导出](./import-export.md) | 从 1Password / Bitwarden / Chrome / LastPass / KeePass 迁移 |
+
+下列页面已下线，仅保留说明以免旧链接 404：
+
+- [Vera AI](./vera.md)（已移除）
+- [团队协作](./team.md)（已移除）
+- [P2P 排障](./p2p-troubleshoot.md)（已移除）
 
 ## 版本
 
-当前手册版本：**v2.0.0**
-发布日期：2026-Q3
+当前手册版本：**v3.2.2**
 
-## 反馈
+仓库：https://github.com/dzcnice/clipvault
 
-发现问题或有建议？欢迎访问 [GitHub Issues](https://github.com/clipvault/clipvault/issues)。
-
-安全类问题请参考 [SECURITY.md](../../SECURITY.md) 按私密渠道披露。
+安全类问题请参考 [SECURITY.md](../../SECURITY.md)。

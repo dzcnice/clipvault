@@ -14,6 +14,13 @@ files:
   - '!**/node_modules/*/{test,tests,__tests__,docs,doc,example,examples,demo}/**'
   - '!**/node_modules/.bin/**'
   - '!**/*.{map,md,markdown}'
+  - '!dist-types{,/**}'
+  - '!dist-types-web{,/**}'
+  - '!coverage{,/**}'
+  - '!docs{,/**}'
+  - '!e2e{,/**}'
+  - '!test-fixtures{,/**}'
+  - '!test-setup{,/**}'
 asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/**/*.node
@@ -59,14 +66,8 @@ nsis:
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-    # v2.0 Sprint 2+3：mDNS 局域网服务发现（macOS 14+ 必须声明，否则沙盒下静默失败）
-    - NSBonjourServices:
-        - _clipvault._tcp
-    - NSLocalNetworkUsageDescription: ClipVault 需要访问局域网以发现和同步您的其他设备。
+    - NSDocumentsFolderUsageDescription: ClipVault 需要访问文稿以导入、导出和备份。
+    - NSDownloadsFolderUsageDescription: ClipVault 需要访问下载目录以导入导出文件。
   notarize: false
 linux:
   target:
