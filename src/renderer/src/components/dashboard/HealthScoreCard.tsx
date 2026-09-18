@@ -1,12 +1,8 @@
 /**
- * Dashboard · 凭证健康分数卡片（v2.0 Sprint 5 · UI 精致化）
+ * Dashboard · 凭证健康分数卡片
  *
- * 直接读取 useHealthReport hook 的 report，本卡内自行渲染：
- *  - SVG 圆环进度 + 中心分数
- *  - 分级色调（>=80 绿 / 60-80 琥珀 / <60 红）
- *  - 底部 2x2 徽章展示四类问题数量
- *
- * 点击跳转 /health。
+ * 有问题时：圆环 + 四类徽章。
+ * 全 0 时：紧凑一行（分数 + 「箱子很干净」），避免空徽章占一整列。
  */
 
 import type { LucideIcon } from 'lucide-react'
@@ -17,9 +13,9 @@ import type { HealthReport } from '../../../../types/health'
 import DashboardCard from './DashboardCard'
 
 function scoreAccent(score: number): string {
-  if (score >= 80) return 'oklch(0.72 0.14 160)' // 绿
-  if (score >= 60) return 'oklch(0.72 0.16 45)' // 琥珀
-  return 'oklch(0.62 0.18 28)' // 红
+  if (score >= 80) return 'var(--success)'
+  if (score >= 60) return 'var(--primary)'
+  return 'var(--destructive)'
 }
 
 function scoreLabel(score: number): string {
@@ -33,41 +29,33 @@ function scoreLabel(score: number): string {
 interface MiniBadgeProps {
   label: string
   count: number
-  accent: string
   icon: LucideIcon
 }
 
-function MiniBadge({ label, count, accent, icon: Icon }: MiniBadgeProps): JSX.Element {
+function MiniBadge({ label, count, icon: Icon }: MiniBadgeProps): JSX.Element {
   const hasIssue = count > 0
   return (
     <div
-      className="flex items-center gap-2 rounded-xl px-2.5 py-2"
+      className="flex items-center gap-2 px-2.5 py-2"
       style={{
-        background: hasIssue
-          ? `color-mix(in oklch, ${accent} 15%, transparent)`
-          : 'rgba(255,255,255,0.35)',
-        border: hasIssue
-          ? `1px solid color-mix(in oklch, ${accent} 35%, transparent)`
-          : '1px solid rgba(255,255,255,0.3)'
+        background: hasIssue ? 'var(--primary-soft)' : 'var(--surface-2)',
+        border: 'var(--px-border) solid var(--line)'
       }}
     >
       <Icon
         size={14}
         strokeWidth={1.75}
         style={{
-          color: hasIssue ? accent : 'var(--text-tertiary)'
+          color: hasIssue ? 'var(--destructive)' : 'var(--ink-faint)'
         }}
       />
-      <span
-        className="flex-1 text-[10px]"
-        style={{ color: 'var(--text-secondary)' }}
-      >
+      <span className="flex-1 font-body text-[10px]" style={{ color: 'var(--ink-soft)' }}>
         {label}
       </span>
       <span
-        className="font-mono text-xs font-semibold tabular-nums"
+        className="font-mono-num text-xs font-semibold tabular-nums"
         style={{
-          color: hasIssue ? accent : 'var(--text-tertiary)'
+          color: hasIssue ? 'var(--destructive)' : 'var(--ink-faint)'
         }}
       >
         {count}
@@ -105,15 +93,22 @@ export function HealthScoreCard({
     return Math.max(0, 100 - penalty)
   }, [report])
 
+  const issueTotal = report
+    ? (report.summary.weak_password ?? 0) +
+      (report.summary.reused_password ?? 0) +
+      (report.summary.pwned ?? 0) +
+      (report.summary.stale_unused ?? 0)
+    : 0
+
   const accent = scoreAccent(score)
   const isLoading = state === 'loading' || state === 'idle'
   const isError = state === 'error'
   const isLocked = state === 'session_required'
   const isReady = state === 'ready' && !!report
+  const compactHealthy = isReady && issueTotal === 0
 
-  // 圆环几何
-  const SIZE = 120
-  const STROKE = 10
+  const SIZE = 96
+  const STROKE = 8
   const R = (SIZE - STROKE) / 2
   const C = 2 * Math.PI * R
   const dashOffset = C - (Math.max(0, Math.min(100, score)) / 100) * C
@@ -125,25 +120,18 @@ export function HealthScoreCard({
       icon={HeartPulse}
       accent={accent}
       loading={isLoading}
-      error={isError ? error ?? '加载失败' : null}
+      error={isError ? (error ?? '加载失败') : null}
       empty={isLocked}
       className={className}
       emptyNode={
-        <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 text-center">
+        <div className="cv-empty py-8">
           <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{
-              background: 'color-mix(in oklch, oklch(0.72 0.14 160) 12%, transparent)',
-              border: '1px dashed color-mix(in oklch, oklch(0.72 0.14 160) 35%, transparent)'
-            }}
+            className="cv-icon-slot !h-12 !w-12"
+            style={{ background: 'var(--primary-soft)', color: 'var(--success)' }}
           >
-            <ShieldCheck
-              size={24}
-              strokeWidth={1.5}
-              style={{ color: 'oklch(0.6 0.13 160)' }}
-            />
+            <ShieldCheck size={20} strokeWidth={1.75} />
           </div>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="font-body text-xs" style={{ color: 'var(--ink-faint)' }}>
             请先解锁 Vault 以扫描
           </p>
         </div>
@@ -153,30 +141,45 @@ export function HealthScoreCard({
         isReady ? (
           <div className="flex items-center justify-between">
             <span>查看完整健康报告</span>
-            <ArrowUpRight
-              size={12}
-              className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-              style={{ color: accent }}
-            />
+            <ArrowUpRight size={12} style={{ color: accent }} />
           </div>
         ) : null
       }
     >
-      {isReady && report ? (
-        <div className="flex items-center gap-5">
-          {/* 圆环 */}
+      {isReady && report && compactHealthy ? (
+        <div
+          className="flex items-center gap-4"
+          data-testid="health-score-compact"
+        >
+          <span
+            className="font-mono-num text-4xl font-semibold leading-none"
+            style={{ color: accent }}
+          >
+            {score}
+          </span>
+          <div className="min-w-0">
+            <p className="font-pixel text-sm font-bold" style={{ color: 'var(--ink)' }}>
+              箱子很干净
+            </p>
+            <p className="font-body text-xs" style={{ color: 'var(--ink-faint)' }}>
+              {scoreLabel(score)} · {report.totalCredentials} 把钥匙
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {isReady && report && !compactHealthy ? (
+        <div className="flex items-center gap-4">
           <div className="relative flex-shrink-0" style={{ width: SIZE, height: SIZE }}>
             <svg width={SIZE} height={SIZE} className="-rotate-90">
-              {/* 背景轨道 */}
               <circle
                 cx={SIZE / 2}
                 cy={SIZE / 2}
                 r={R}
                 fill="none"
-                stroke="rgba(255,255,255,0.5)"
+                stroke="var(--line-soft)"
                 strokeWidth={STROKE}
               />
-              {/* 进度 */}
               <circle
                 cx={SIZE / 2}
                 cy={SIZE / 2}
@@ -188,55 +191,42 @@ export function HealthScoreCard({
                 strokeDasharray={C}
                 strokeDashoffset={dashOffset}
                 style={{
-                  transition: 'stroke-dashoffset 0.9s cubic-bezier(0.16, 1, 0.3, 1)',
-                  filter: `drop-shadow(0 0 8px color-mix(in oklch, ${accent} 60%, transparent))`
+                  transition: 'stroke-dashoffset 0.9s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               />
             </svg>
-            {/* 中心数字 */}
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <span
-                className="text-3xl font-light leading-none tracking-tight"
-                style={{
-                  color: accent,
-                  fontVariantNumeric: 'tabular-nums'
-                }}
+                className="font-mono-num text-2xl font-semibold leading-none"
+                style={{ color: accent }}
               >
                 {score}
               </span>
-              <span
-                className="mt-1 text-[10px] font-medium"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <span className="mt-1 text-[10px] font-medium" style={{ color: 'var(--ink-faint)' }}>
                 {scoreLabel(score)}
               </span>
             </div>
           </div>
 
-          {/* 右侧：问题徽章 */}
           <div className="grid min-w-0 flex-1 grid-cols-1 gap-1.5">
             <MiniBadge
               label="弱密码"
               count={report.summary.weak_password ?? 0}
-              accent="oklch(0.72 0.16 45)"
               icon={AlertTriangle}
             />
             <MiniBadge
               label="重复密码"
               count={report.summary.reused_password ?? 0}
-              accent="oklch(0.62 0.18 28)"
               icon={Copy}
             />
             <MiniBadge
               label="泄露记录"
               count={report.summary.pwned ?? 0}
-              accent="oklch(0.55 0.2 28)"
               icon={AlertTriangle}
             />
             <MiniBadge
               label="长期未用"
               count={report.summary.stale_unused ?? 0}
-              accent="oklch(0.6 0.03 270)"
               icon={History}
             />
           </div>

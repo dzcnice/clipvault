@@ -54,13 +54,14 @@ export default function DashboardPage(): JSX.Element {
       <div className="cv-page-inner max-w-6xl">
         <header className="mb-6 flex animate-fadeIn items-end justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            <p className="cv-kicker mb-1">概览</p>
+            <h1 className="cv-page-title">
               {hello}
-              <span className="ml-2 text-lg font-normal text-muted-foreground">
-                · 欢迎回来
+              <span className="ml-2 font-body text-base font-normal text-muted-foreground">
+                欢迎回来
               </span>
             </h1>
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="cv-page-desc">
               {dateLabel}
               {healthReportError ? ' · 健康报告暂不可用' : ''}
             </p>
@@ -90,9 +91,9 @@ export default function DashboardPage(): JSX.Element {
               error: Boolean(data.todayClips.error)
             }}
             snippetTotal={{
-              value: 0,
-              loading: false,
-              error: false
+              value: data.snippets.data?.total ?? 0,
+              loading: data.snippets.loading,
+              error: Boolean(data.snippets.error)
             }}
             healthScore={{
               value: healthScore,
@@ -102,13 +103,12 @@ export default function DashboardPage(): JSX.Element {
           />
         </section>
 
-        <section className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <div className="h-full lg:col-span-2">
+        <section className="mb-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
             <ActivityTimelineCard state={data.todayClips} />
           </div>
           <div className="lg:col-span-1">
             <HealthScoreCard
-              className="h-full min-h-[320px]"
               state={healthState}
               report={report}
               error={healthReportError ?? undefined}

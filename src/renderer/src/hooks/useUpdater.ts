@@ -1,7 +1,7 @@
 /**
  * useUpdater (TASK-072)
  *
- * 绑定 window.api.sprint14.updater —— API 未挂载时安全降级为 idle。
+ * 绑定 window.api.updater —— API 未挂载时安全降级为 idle。
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -10,7 +10,8 @@ import type {
   UpdateInfoPayload,
   UpdaterDiagnostics,
   UpdaterEvent,
-  UpdaterStatus
+  UpdaterStatus,
+  UpdaterStatePayload
 } from '../../../types/updater'
 
 interface UpdaterAPIShape {
@@ -22,7 +23,7 @@ interface UpdaterAPIShape {
   ) => Promise<{ success: boolean; error?: string }>
   getState: () => Promise<{
     success: boolean
-    data?: UpdaterEvent & { channel: UpdateChannel }
+    data?: UpdaterStatePayload
   }>
   getDiagnostics?: () => Promise<{
     success: boolean
@@ -36,10 +37,10 @@ function getApi(): UpdaterAPIShape | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint14?: { updater?: UpdaterAPIShape } }
+      api?: { updater?: UpdaterAPIShape }
     }
   ).api
-  return api?.sprint14?.updater ?? null
+  return api?.updater ?? null
 }
 
 export interface UseUpdaterState {
@@ -48,6 +49,8 @@ export interface UseUpdaterState {
   progress: UpdaterEvent['progress'] | null
   error: string | null
   channel: UpdateChannel
+  /** false = 开发态 / unpackaged，侧栏应显示「开发版」而不是「检查中」 */
+  packaged: boolean
   check: () => Promise<UpdateInfoPayload | null>
   download: () => Promise<boolean>
   quitAndInstall: () => Promise<void>
@@ -62,6 +65,7 @@ export function useUpdater(): UseUpdaterState {
   const [progress, setProgress] = useState<UpdaterEvent['progress'] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [channel, setChannelState] = useState<UpdateChannel>('stable')
+  const [packaged, setPackaged] = useState(true)
 
   useEffect(() => {
     const api = getApi()
@@ -76,6 +80,7 @@ export function useUpdater(): UseUpdaterState {
           setProgress(r.data.progress ?? null)
           setError(r.data.error ?? null)
           setChannelState(r.data.channel)
+          setPackaged(r.data.packaged !== false)
         }
       })
       .catch((err) => {
@@ -165,6 +170,7 @@ export function useUpdater(): UseUpdaterState {
     progress,
     error,
     channel,
+    packaged,
     check,
     download,
     quitAndInstall,

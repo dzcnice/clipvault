@@ -27,31 +27,12 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, hint, icon: Icon, accent, loading, error }: KpiCardProps): JSX.Element {
   return (
-    <div
-      className="group relative flex h-24 items-center gap-3 overflow-hidden rounded-xl border px-4 transition-all duration-200 hover:-translate-y-0.5"
-      style={{
-        background: 'var(--surface)',
-        borderColor: 'var(--border-subtle)',
-        boxShadow: 'var(--shadow-sm)'
-      }}
-    >
-      {/* 右侧色调光晕 */}
+    <div className="cv-panel flex h-[5.5rem] items-center gap-3 px-4">
       <div
-        aria-hidden
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-25 blur-2xl transition-opacity duration-500 group-hover:opacity-50"
-        style={{ background: accent }}
-      />
-
-      {/* 图标徽章 */}
-      <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110"
-        style={{
-          background: `color-mix(in oklch, ${accent} 20%, transparent)`,
-          border: `1px solid color-mix(in oklch, ${accent} 40%, transparent)`,
-          boxShadow: `0 4px 12px -4px color-mix(in oklch, ${accent} 40%, transparent)`
-        }}
+        className="cv-icon-slot shrink-0"
+        style={{ background: 'var(--primary-soft)', color: accent }}
       >
-        <Icon size={18} strokeWidth={1.75} style={{ color: accent }} aria-hidden />
+        <Icon size={16} strokeWidth={2.25} aria-hidden />
       </div>
 
       {/* 文字区 */}
@@ -66,7 +47,7 @@ function KpiCard({ label, value, hint, icon: Icon, accent, loading, error }: Kpi
           <span
             className="text-3xl font-light leading-none tabular-nums tracking-tight"
             style={{
-              color: error ? 'oklch(0.62 0.18 28)' : 'var(--text-primary)',
+              color: error ? 'var(--destructive)' : 'var(--ink)',
               fontVariantNumeric: 'tabular-nums'
             }}
           >
@@ -89,8 +70,6 @@ function KpiCard({ label, value, hint, icon: Icon, accent, loading, error }: Kpi
 export interface KpiStripProps {
   credentialTotal: { value: number; loading: boolean; error: boolean }
   todayClips: { value: number; loading: boolean; error: boolean }
-  /** 兼容旧 prop；个人版忽略 */
-  teamOnline?: { online: number; total: number; loading: boolean; error: boolean }
   snippetTotal?: { value: number; loading: boolean; error: boolean }
   healthScore: { value: number; loading: boolean; error: boolean }
 }
@@ -108,7 +87,7 @@ export function KpiStrip({
         value={credentialTotal.value}
         hint="条"
         icon={KeyRound}
-        accent="oklch(0.72 0.16 45)"
+        accent="var(--primary)"
         loading={credentialTotal.loading}
         error={credentialTotal.error}
       />
@@ -117,7 +96,7 @@ export function KpiStrip({
         value={todayClips.value}
         hint="24h"
         icon={Clipboard}
-        accent="oklch(0.68 0.16 255)"
+        accent="var(--ink)"
         loading={todayClips.loading}
         error={todayClips.error}
       />
@@ -126,7 +105,7 @@ export function KpiStrip({
         value={snippetTotal?.value ?? 0}
         hint="条"
         icon={Scissors}
-        accent="oklch(0.72 0.14 160)"
+        accent="var(--success)"
         loading={snippetTotal?.loading}
         error={snippetTotal?.error}
       />
@@ -137,10 +116,10 @@ export function KpiStrip({
         icon={HeartPulse}
         accent={
           healthScore.value >= 80
-            ? 'oklch(0.72 0.14 160)'
+            ? 'var(--success)'
             : healthScore.value >= 60
-              ? 'oklch(0.72 0.16 45)'
-              : 'oklch(0.62 0.18 28)'
+              ? 'var(--primary)'
+              : 'var(--destructive)'
         }
         loading={healthScore.loading}
         error={healthScore.error}

@@ -1,7 +1,7 @@
 /**
  * KeePass .kdbx 导入步骤（A4：落地实现）
  *
- * 后端 `parseKeepassKdbx` + IPC `sprint14:import.parse` 已接好 kdbxweb；
+ * 后端 `parseKeepassKdbx` + IPC `import:parse` 已接好 kdbxweb；
  * 本组件负责：
  *   1. 选择 .kdbx 文件（读为 base64 以便 IPC 透传）
  *   2. 输入主密码

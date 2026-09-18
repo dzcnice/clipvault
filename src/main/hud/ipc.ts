@@ -40,5 +40,5 @@ export function registerHUDIPC(): void {
 }
 
 export { HUD_CHANNELS }
-// 仅用于 sprint6-registry 避免 tree-shake 警告
+// 仅用于 hud-registry 避免 tree-shake 警告
 export const __touch = (): BrowserWindow | null => null

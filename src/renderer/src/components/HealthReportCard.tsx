@@ -1,8 +1,8 @@
 /**
- * HealthReportCard (Sprint 11 · TASK-059)
+ * 健康分数摘要卡 · 像素壳
  */
 
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { useHealthReport } from '../hooks/useHealthReport'
 
 export interface HealthReportCardProps {
@@ -10,22 +10,20 @@ export interface HealthReportCardProps {
   onOpenFullReport?: () => void
 }
 
-function scoreColor(score: number): string {
-  if (score >= 90) return '#10b981'
-  if (score >= 70) return '#eab308'
-  if (score >= 50) return '#f97316'
-  return '#ef4444'
+function scoreTone(score: number): string {
+  if (score >= 90) return 'var(--success)'
+  if (score >= 70) return 'var(--primary)'
+  return 'var(--destructive)'
 }
 
-export const HealthReportCard: React.FC<HealthReportCardProps> = ({
+export function HealthReportCard({
   className,
   onOpenFullReport
-}) => {
+}: HealthReportCardProps): JSX.Element {
   const { state, report, error, refresh } = useHealthReport(true)
 
   const score = useMemo(() => {
     if (!report) return 100
-    // 简单复算：与后端 computeScore 同策略（保险起见复用 summary）
     const penalty =
       (report.summary.weak_password ?? 0) * 5 +
       (report.summary.reused_password ?? 0) * 10 +
@@ -43,106 +41,72 @@ export const HealthReportCard: React.FC<HealthReportCardProps> = ({
     .slice(0, 3)
 
   return (
-    <div
-      className={className}
-      style={{
-        padding: 16,
-        borderRadius: 12,
-        border: '1px solid rgba(0,0,0,0.1)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>凭证健康报告</h3>
+    <div className={`cv-panel p-5 ${className ?? ''}`}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="font-pixel text-sm font-bold">健康分数</h3>
         <button
           type="button"
+          className="cv-btn cv-btn-ghost text-[11px] !px-2 !py-1"
           onClick={() => void refresh(true)}
-          style={{ fontSize: 12, cursor: 'pointer' }}
         >
           刷新
         </button>
       </div>
 
-      {state === 'loading' && <div>加载中…</div>}
-      {state === 'session_required' && <div>请先解锁 Vault</div>}
-      {state === 'error' && <div style={{ color: '#ef4444' }}>错误：{error}</div>}
+      {state === 'loading' || state === 'idle' ? (
+        <p className="text-sm text-muted-foreground">扫描中…</p>
+      ) : null}
+      {state === 'session_required' ? (
+        <p className="text-sm text-muted-foreground">保险库未打开</p>
+      ) : null}
+      {state === 'error' ? (
+        <p className="text-sm" style={{ color: 'var(--destructive)' }}>
+          {error}
+        </p>
+      ) : null}
 
-      {state === 'ready' && report && (
+      {state === 'ready' && report ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <div
-              style={{
-                fontSize: 48,
-                fontWeight: 700,
-                color: scoreColor(score)
-              }}
+          <div className="mb-4 flex items-baseline gap-2">
+            <span
+              className="font-mono-num text-5xl font-semibold leading-none"
+              style={{ color: scoreTone(score) }}
             >
               {score}
-            </div>
-            <div style={{ fontSize: 12, color: '#666' }}>
-              / 100（共 {report.totalCredentials} 个凭证）
-            </div>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              / 100 · {report.totalCredentials} 把钥匙
+            </span>
           </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Badge label="弱密码" n={report.summary.weak_password} color="#f97316" />
-            <Badge label="重复" n={report.summary.reused_password} color="#ef4444" />
-            <Badge label="陈旧" n={report.summary.stale_unused} color="#6b7280" />
-            <Badge label="泄露" n={report.summary.pwned} color="#dc2626" />
+          <div className="mb-3 flex flex-wrap gap-2">
+            <span className="cv-badge">弱密码 {report.summary.weak_password}</span>
+            <span className="cv-badge">重复 {report.summary.reused_password}</span>
+            <span className="cv-badge">陈旧 {report.summary.stale_unused}</span>
+            <span className="cv-badge">泄露 {report.summary.pwned}</span>
           </div>
-
-          {topIssues.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>最紧急建议：</div>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {topIssues.map((i, idx) => (
-                  <li key={idx}>
-                    <strong>{i.credentialName}</strong>：{i.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {onOpenFullReport && (
+          {topIssues.length > 0 ? (
+            <ul className="space-y-1.5 text-sm">
+              {topIssues.map((issue, idx) => (
+                <li key={`${issue.credentialId}-${idx}`}>
+                  <span className="font-medium">{issue.credentialName}</span>
+                  <span className="text-muted-foreground"> · {issue.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {onOpenFullReport ? (
             <button
               type="button"
+              className="cv-btn cv-btn-secondary mt-4 text-xs"
               onClick={onOpenFullReport}
-              style={{
-                alignSelf: 'flex-start',
-                padding: '4px 10px',
-                borderRadius: 6,
-                border: '1px solid rgba(0,0,0,0.15)',
-                cursor: 'pointer'
-              }}
             >
               查看完整报告
             </button>
-          )}
+          ) : null}
         </>
-      )}
+      ) : null}
     </div>
   )
 }
-
-const Badge: React.FC<{ label: string; n: number; color: string }> = ({
-  label,
-  n,
-  color
-}) => (
-  <span
-    style={{
-      padding: '2px 10px',
-      borderRadius: 12,
-      fontSize: 12,
-      background: color + '20',
-      color
-    }}
-  >
-    {label} {n}
-  </span>
-)
 
 export default HealthReportCard

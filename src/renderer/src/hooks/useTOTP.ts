@@ -23,10 +23,10 @@ function getApi(): Sprint11TOTPAPI | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint11?: { totp?: Sprint11TOTPAPI } }
+      api?: { totp?: Sprint11TOTPAPI }
     }
   ).api
-  return api?.sprint11?.totp ?? null
+  return api?.totp ?? null
 }
 
 export interface UseTOTPState {

@@ -13,7 +13,7 @@ interface Props {
   state: DashboardData['todayClips']
 }
 
-const ACCENT = 'oklch(0.72 0.16 250)' // 蓝
+const ACCENT = 'var(--primary)'
 
 export function TodayClipsCard({ state }: Props): JSX.Element {
   const navigate = useNavigate()
@@ -29,21 +29,14 @@ export function TodayClipsCard({ state }: Props): JSX.Element {
       error={state.error}
       empty={!state.loading && !state.error && (!data || data.count === 0)}
       emptyNode={
-        <div className="flex min-h-[120px] flex-col items-center justify-center gap-3">
+        <div className="cv-empty py-8">
           <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{
-              background: `color-mix(in oklch, ${ACCENT} 12%, transparent)`,
-              border: `1px dashed color-mix(in oklch, ${ACCENT} 35%, transparent)`
-            }}
+            className="cv-icon-slot !h-12 !w-12"
+            style={{ background: 'var(--primary-soft)', color: ACCENT }}
           >
-            <ClipboardList
-              size={26}
-              strokeWidth={1.5}
-              style={{ color: ACCENT, opacity: 0.8 }}
-            />
+            <ClipboardList size={20} strokeWidth={1.75} />
           </div>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="font-body text-xs" style={{ color: 'var(--ink-faint)' }}>
             今天还没有复制任何内容
           </p>
         </div>
@@ -87,12 +80,8 @@ export function TodayClipsCard({ state }: Props): JSX.Element {
               {data.items.slice(0, 3).map((it) => (
                 <li
                   key={it.id}
-                  className="truncate rounded-lg px-3 py-2 text-[11px] leading-relaxed transition-colors"
-                  style={{
-                    background: 'rgba(255,255,255,0.35)',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    color: 'var(--text-secondary)'
-                  }}
+                  className="cv-list-row truncate text-[11px] leading-relaxed"
+                  style={{ color: 'var(--ink-soft)' }}
                 >
                   {String(it.content ?? '').slice(0, 80) || '（空白内容）'}
                 </li>

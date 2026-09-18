@@ -4,12 +4,13 @@
  * v3.0 个人本地版：仅 personal 工作区，无团队推送 / 文件传输透传。
  */
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, clipboard } from 'electron'
 import { IPC_CHANNELS } from '../../types'
 import * as clipboardStore from '../../db/clipboard-store'
 import { getClipboardMonitor, ClipboardChangeEvent } from '../clipboard/monitor'
 import { wrapHandler, wrapUnlockedHandler } from './utils'
 import { logger } from '../utils/logger'
+import { expandSnippetVariables } from '../../utils/snippet-vars'
 import { getImagePasteMode, getPrefs, setPrefs } from '../prefs'
 import type {
   ClipboardFilter,
@@ -47,6 +48,7 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
 
   // 监听剪贴板变化，保存到数据库并通知渲染进程（始终 personal）
   monitor.on('change', async (event: ClipboardChangeEvent) => {
+    const generationAtDetect = monitor.getGeneration()
     try {
       const item = await clipboardStore.addClipboardItem(
         {
@@ -64,20 +66,24 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         mainWindow.webContents.send(IPC_CHANNELS.CLIPBOARD_NEW_ITEM, item)
       }
 
-      // 截图/图片：按用户偏好写回系统剪贴板（both / path / image）
+      // 截图/图片：按用户偏好写回。落盘期间若用户又复制了别的内容，禁止覆盖。
       if (item && item.type === 'image' && item.imagePath && item.imageData) {
-        try {
-          const mode = getImagePasteMode()
-          monitor.writeImagePaste(item.imageData, item.imagePath, mode)
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('clipboard:image-paste-mode', {
-              mode,
-              path: item.imagePath,
-              label: imageModeLabel(mode)
-            })
+        if (monitor.getGeneration() !== generationAtDetect) {
+          logger.info('[IPC] skip image paste, clipboard changed during save')
+        } else {
+          try {
+            const mode = getImagePasteMode()
+            monitor.writeImagePaste(item.imageData, item.imagePath, mode)
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('clipboard:image-paste-mode', {
+                mode,
+                path: item.imagePath,
+                label: imageModeLabel(mode)
+              })
+            }
+          } catch (err) {
+            logger.warn('[IPC] auto image paste failed:', err)
           }
-        } catch (err) {
-          logger.warn('[IPC] auto image paste failed:', err)
         }
       }
     } catch (error) {
@@ -232,8 +238,20 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
           return { success: false, error: '记录不存在' }
         }
 
-        if (item.type === 'text' || item.type === 'html') {
-          monitor.writeText(item.content || '')
+        if (item.isSnippet || item.type === 'text' || item.type === 'html') {
+          let text = item.content || ''
+          if (item.isSnippet) {
+            let clip = ''
+            try {
+              clip = clipboard.readText()
+            } catch {
+              clip = ''
+            }
+            text = expandSnippetVariables(item.content || item.preview || '', { clip })
+          }
+          monitor.writeText(text)
+        } else if (item.type === 'file') {
+          monitor.writeText(item.filePath || item.content || '')
         } else if (item.type === 'image') {
           const mode = opts?.mode ?? getImagePasteMode()
           if (mode === 'path') {
@@ -281,6 +299,22 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         return { success: true, data: path }
       } catch (error) {
         logger.error('[IPC] Error copying clipboard path:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    })
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.CLIPBOARD_GET_THUMBNAIL,
+    wrapHandler(async (_event, id: string): Promise<ApiResponse<string | null>> => {
+      try {
+        const imagePath = clipboardStore.getClipboardImagePath(id)
+        if (!imagePath) return { success: true, data: null }
+        const { loadThumbnailAsDataUrl } = await import('../storage/image-store')
+        const thumb = await loadThumbnailAsDataUrl(imagePath)
+        return { success: true, data: thumb }
+      } catch (error) {
+        logger.error('[IPC] Error getting thumbnail:', error)
         return { success: false, error: (error as Error).message }
       }
     })
@@ -397,16 +431,14 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
     monitor.start()
   }
 
-  // 片段全局热键
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { refreshSnippetHotkeys } = require('../shortcuts/snippet-hotkeys') as {
-      refreshSnippetHotkeys: () => void
-    }
-    refreshSnippetHotkeys()
-  } catch (err) {
-    logger.warn('[IPC] snippet hotkeys init skipped:', err)
-  }
+  // 片段全局热键：必须动态 import，打包后 require 相对路径会找不到 chunk
+  void import('../shortcuts/snippet-hotkeys')
+    .then(({ refreshSnippetHotkeys }) => {
+      refreshSnippetHotkeys()
+    })
+    .catch((err) => {
+      logger.warn('[IPC] snippet hotkeys init skipped:', err)
+    })
 
   logger.info('[IPC] Clipboard handlers registered')
 }

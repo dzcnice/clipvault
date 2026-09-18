@@ -26,19 +26,17 @@ export default function TotpPage(): JSX.Element {
       const api = (
         window as unknown as {
           api?: {
-            sprint11?: {
-              totp?: {
-                list?: () => Promise<{
-                  success: boolean
-                  data?: TotpRow[]
-                  error?: string
-                }>
-              }
+            totp?: {
+              list?: () => Promise<{
+                success: boolean
+                data?: TotpRow[]
+                error?: string
+              }>
             }
           }
         }
       ).api
-      const res = await api?.sprint11?.totp?.list?.()
+      const res = await api?.totp?.list?.()
       if (!res?.success) {
         setError(res?.error || '加载失败')
         setRows([])
@@ -90,14 +88,16 @@ export default function TotpPage(): JSX.Element {
           <div className="cv-empty text-destructive">{error}</div>
         ) : rows.length === 0 ? (
           <div className="cv-empty">
-            <Shield size={28} />
-            <p className="font-pixel font-bold">还没有 TOTP</p>
-            <p className="text-sm text-muted-foreground">
-              在凭证详情里绑定 otpauth 或密钥后会出现在这里
+            <div className="cv-icon-slot !h-16 !w-16" style={{ background: 'var(--primary-soft)' }}>
+              <Shield size={28} />
+            </div>
+            <p className="font-pixel font-bold">还没有验证码</p>
+            <p className="font-body max-w-xs text-sm text-muted-foreground">
+              打开某条凭证，绑定 otpauth:// 或 Base32 密钥后会出现在这里。
             </p>
           </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {rows.map((r) => (
               <li key={r.credentialId} className="cv-panel flex items-center gap-4 p-4">
                 <TOTPRing credentialId={r.credentialId} size={72} />

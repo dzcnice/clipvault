@@ -25,10 +25,10 @@ function getApi(): AuditAPIShape | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint13?: { audit?: AuditAPIShape } }
+      api?: { security?: { audit?: AuditAPIShape } }
     }
   ).api
-  return api?.sprint13?.audit ?? null
+  return api?.security?.audit ?? null
 }
 
 export interface UseCredentialAuditState {

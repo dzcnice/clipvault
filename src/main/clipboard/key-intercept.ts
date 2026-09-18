@@ -40,7 +40,7 @@ let installed = false
 
 /**
  * 启动密钥拦截主流程。
- * 由 sprint4-registry 调用，main window 必须存在以便 send。
+ * 由 key-intercept-registry 调用，main window 必须存在以便 send。
  */
 export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
   if (installed) return
@@ -70,6 +70,7 @@ export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
         if (entry) {
           entry.resolve({ promptId, action: 'cancel' })
           pending.delete(promptId)
+          getClipboardMonitor().flushPendingKeyChange()
           logger.warn(`[KeyIntercept] prompt ${promptId} timeout → cancel`)
         }
       }, 60_000)
@@ -105,6 +106,7 @@ export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
       logger.info(
         `[KeyIntercept] decision ${decision.promptId} → ${decision.action}`
       )
+      getClipboardMonitor().flushPendingKeyChange()
     }
   )
 

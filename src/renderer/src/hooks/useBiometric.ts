@@ -1,7 +1,7 @@
 /**
  * useBiometric (TASK-067)
  *
- * 基于 window.api.sprint13.biometric 包装；API 未挂载时安全降级。
+ * 基于 window.api.security.biometric 包装；API 未挂载时安全降级。
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -28,10 +28,10 @@ function getApi(): BiometricAPIShape | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint13?: { biometric?: BiometricAPIShape } }
+      api?: { security?: { biometric?: BiometricAPIShape } }
     }
   ).api
-  return api?.sprint13?.biometric ?? null
+  return api?.security?.biometric ?? null
 }
 
 export interface UseBiometricState {

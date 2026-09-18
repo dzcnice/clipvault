@@ -1,10 +1,10 @@
 /**
  * useClipClearToast (TASK-068)
  *
- * 订阅主进程 sprint13:auto-clear-event 广播，维护 UI 倒计时状态。
- * 依赖 preload 暴露的 window.api.sprint13.autoClear（由整合人接线）。
+ * 订阅主进程 security:auto-clear-event 广播，维护 UI 倒计时状态。
+ * 依赖 preload 暴露的 window.api.security.autoClear。
  *
- * 兼容性：在 sprint13 API 未挂载时安全降级（visible=false）。
+ * 兼容性：API 未挂载时安全降级（visible=false）。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -13,7 +13,7 @@ import type {
   AutoClearStatus
 } from '../../../types/auto-clear'
 
-interface Sprint13APIShape {
+interface SecurityAPIShape {
   autoClear: {
     schedule: (
       secret: string,
@@ -25,11 +25,11 @@ interface Sprint13APIShape {
   }
 }
 
-function getApi(): Sprint13APIShape | null {
+function getApi(): SecurityAPIShape | null {
   if (typeof window === 'undefined') return null
-  const api = (window as unknown as { api?: { sprint13?: Sprint13APIShape } })
+  const api = (window as unknown as { api?: { security?: SecurityAPIShape } })
     .api
-  return api?.sprint13 ?? null
+  return api?.security ?? null
 }
 
 export interface ClipClearToastState {

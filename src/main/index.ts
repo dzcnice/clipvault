@@ -18,7 +18,8 @@ import { logger } from './utils/logger'
 import { safeOpenExternal } from './security/open-external'
 import {
   registerTrustedWebContents,
-  unregisterTrustedWebContents
+  unregisterTrustedWebContents,
+  wrapHandler
 } from './ipc/utils'
 
 let mainWindow: BrowserWindow | null = null
@@ -112,52 +113,70 @@ function createWindow(): void {
 
 /** 注册窗口控制 IPC */
 function registerWindowHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
-    mainWindow?.minimize()
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_MINIMIZE,
+    wrapHandler(async () => {
+      mainWindow?.minimize()
+    })
+  )
 
-  ipcMain.handle(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_MAXIMIZE,
+    wrapHandler(async () => {
+      if (mainWindow?.isMaximized()) {
+        mainWindow.unmaximize()
+      } else {
+        mainWindow?.maximize()
+      }
+    })
+  )
 
-  ipcMain.handle(IPC_CHANNELS.WINDOW_CLOSE, () => {
-    mainWindow?.close()
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_CLOSE,
+    wrapHandler(async () => {
+      mainWindow?.close()
+    })
+  )
 
-  ipcMain.handle(IPC_CHANNELS.WINDOW_TOGGLE_ALWAYS_ON_TOP, () => {
-    if (mainWindow) {
-      const isOnTop = mainWindow.isAlwaysOnTop()
-      mainWindow.setAlwaysOnTop(!isOnTop)
-      return !isOnTop
-    }
-    return false
-  })
-
-  // σ2 · P2-7：TitleBar mount 时查一次真实窗口状态
-  ipcMain.handle(IPC_CHANNELS.WINDOW_GET_STATE, () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return { maximized: false, alwaysOnTop: false }
-    }
-    return {
-      maximized: mainWindow.isMaximized(),
-      alwaysOnTop: mainWindow.isAlwaysOnTop()
-    }
-  })
-
-  // 开机自启设置
-  ipcMain.handle(IPC_CHANNELS.APP_GET_AUTO_LAUNCH, async () => {
-    try {
-      return await autoLauncher.isEnabled()
-    } catch {
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_TOGGLE_ALWAYS_ON_TOP,
+    wrapHandler(async () => {
+      if (mainWindow) {
+        const isOnTop = mainWindow.isAlwaysOnTop()
+        mainWindow.setAlwaysOnTop(!isOnTop)
+        return !isOnTop
+      }
       return false
-    }
-  })
+    })
+  )
 
-  ipcMain.handle(IPC_CHANNELS.APP_SET_AUTO_LAUNCH, async (_, enabled: boolean) => {
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_GET_STATE,
+    wrapHandler(async () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return { maximized: false, alwaysOnTop: false }
+      }
+      return {
+        maximized: mainWindow.isMaximized(),
+        alwaysOnTop: mainWindow.isAlwaysOnTop()
+      }
+    })
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.APP_GET_AUTO_LAUNCH,
+    wrapHandler(async () => {
+      try {
+        return await autoLauncher.isEnabled()
+      } catch {
+        return false
+      }
+    })
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.APP_SET_AUTO_LAUNCH,
+    wrapHandler(async (_event, enabled: boolean) => {
     try {
       if (enabled) {
         await autoLauncher.enable()
@@ -169,8 +188,8 @@ function registerWindowHandlers(): void {
       logger.error('[AutoLaunch] Error:', error)
       return false
     }
-  })
-
+    })
+  )
 }
 
 // This method will be called when Electron has finished

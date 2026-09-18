@@ -60,7 +60,8 @@ export function registerExportHandlers(mainWindow: BrowserWindow): void {
         }
 
         let credentials = options.includeCredentials
-          ? listCredentials({}).items
+          ? listCredentials(undefined, undefined, undefined, undefined, undefined, undefined, true)
+              .items
           : undefined
         let clipboardItems = options.includeClipboard
           ? listClipboardHistory(undefined, 5000).items
@@ -83,24 +84,15 @@ export function registerExportHandlers(mainWindow: BrowserWindow): void {
         // 字段裁剪（目标结构：永远是 Credential 形状，未选字段置空）
         const fields = options.credentialFields
         if (credentials && fields) {
-          credentials = credentials.map(
-            (c: {
-              value: string
-              description?: string
-              tags: string[]
-              metadata: Record<string, unknown>
-              createdAt: number
-              updatedAt: number
-            }) => ({
-              ...c,
-              value: fields.value === false ? '' : c.value,
-              description: fields.description === false ? undefined : c.description,
-              tags: fields.tags === false ? [] : c.tags,
-              metadata: fields.metadata === false ? {} : c.metadata,
-              createdAt: fields.timestamps === false ? 0 : c.createdAt,
-              updatedAt: fields.timestamps === false ? 0 : c.updatedAt
-            })
-          )
+          credentials = credentials.map((c) => ({
+            ...c,
+            value: fields.value === false ? '' : c.value,
+            description: fields.description === false ? undefined : c.description,
+            tags: fields.tags === false ? [] : c.tags,
+            metadata: fields.metadata === false ? {} : c.metadata,
+            createdAt: fields.timestamps === false ? 0 : c.createdAt,
+            updatedAt: fields.timestamps === false ? 0 : c.updatedAt
+          }))
         }
 
         let content: string

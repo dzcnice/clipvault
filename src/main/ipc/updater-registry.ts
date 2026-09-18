@@ -12,8 +12,8 @@ import {
   UPDATER_CHANNELS,
   type UpdateChannel,
   type UpdateInfoPayload,
-  type UpdaterEvent,
-  type UpdaterDiagnostics
+  type UpdaterDiagnostics,
+  type UpdaterStatePayload
 } from '../../types/updater'
 import { updaterService } from '../updater'
 import { isValidChannel } from '../updater/channel'
@@ -34,9 +34,9 @@ import type { CredentialType } from '../../types'
 
 let registered = false
 
-export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
+export function registerUpdaterIPC(mainWindow: BrowserWindow | null): void {
   if (registered) {
-    logger.warn('[IPC] Sprint14 registry already registered, skip')
+    logger.warn('[IPC] Updater registry already registered, skip')
     return
   }
   registered = true
@@ -45,7 +45,7 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
     try {
       updaterService.start(mainWindow)
     } catch (err) {
-      logger.warn(`[Sprint14] updater start failed: ${(err as Error).message}`)
+      logger.warn(`[Updater] updater start failed: ${(err as Error).message}`)
     }
   }
 
@@ -125,7 +125,7 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
 
   ipcMain.handle(
     UPDATER_CHANNELS.GET_STATE,
-    wrapHandler(async (): Promise<ApiResponse<UpdaterEvent & { channel: UpdateChannel }>> => {
+    wrapHandler(async (): Promise<ApiResponse<UpdaterStatePayload>> => {
       try {
         return { success: true, data: updaterService.getState() }
       } catch (err) {
@@ -213,7 +213,7 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
             })
             count++
           } catch (err) {
-            logger.error('[sprint14/import.commit] skip item:', err)
+            logger.error('[import.commit] skip item:', err)
             skipped++
           }
         }
@@ -224,10 +224,10 @@ export function registerSprint14IPC(mainWindow: BrowserWindow | null): void {
     })
   )
 
-  logger.info('[IPC] Sprint14 registry ready (updater + import)')
+  logger.info('[IPC] Updater registry ready (updater + import)')
 }
 
-export function _unregisterSprint14ForTests(): void {
+export function _unregisterUpdaterForTests(): void {
   registered = false
   for (const ch of [
     UPDATER_CHANNELS.CHECK,

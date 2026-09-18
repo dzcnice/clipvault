@@ -4,8 +4,8 @@
  * 策略：
  *   - enroll：用户在已解锁状态下注册；从 vault.getDEK() 取出 DEK 副本，
  *     用 safeStorage（OS DPAPI / Keychain）包装后存 `biometric_enrollment.encrypted_dek`
- *   - unlock：OS 生物识别 gesture 确认 → safeStorage 解出 DEK → 调
- *     vault.unlockWithDek(dek) 注入到 activeDek；主密码**永远不落盘**
+ *   - unlock：macOS 走 Touch ID；Windows 仅校验当前用户 DPAPI 能解开已注册 DEK
+ *     （无 Hello 弹窗）→ vault.unlockWithDek(dek)；主密码**永远不落盘**
  *
  * 失败计数（P1）：只在 unlock 成功时清零；失败累计到 BIOMETRIC_MAX_FAIL 后
  * 直接锁死 BIOMETRIC_LOCK_MS，锁定期满后继续累计，不重置计数，防止暴力 5 次/周期。

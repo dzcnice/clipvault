@@ -96,6 +96,7 @@ export default function ClipboardPage(): JSX.Element {
     return Object.keys(f).length ? f : undefined
   }, [searchKeyword, typeFilter, pinnedOnly])
 
+  const [limit, setLimit] = useState(80)
   const {
     items,
     total,
@@ -106,7 +107,7 @@ export default function ClipboardPage(): JSX.Element {
     pinItem,
     copyItem,
     clearHistory
-  } = useClipboard({ filter, limit: 500, workspace: 'personal' })
+  } = useClipboard({ filter, limit, workspace: 'personal' })
 
   const duplicateOf = useMemo(() => {
     const m = new Map<string, number>()
@@ -428,16 +429,29 @@ export default function ClipboardPage(): JSX.Element {
             </p>
           </div>
         ) : (
-          <ClipboardListView
-            items={displayItems}
-            onCopy={(item) => void handleCopy(item)}
-            onCopyImage={(item, mode) => void handleCopyImage(item, mode)}
-            onPin={(item) => void pinItem(item.id)}
-            onDelete={(item) => void deleteItem(item.id)}
-            selectedIds={selected}
-            onToggleSelect={toggleSelect}
-            duplicateOf={duplicateOf}
-          />
+          <>
+            <ClipboardListView
+              items={displayItems}
+              onCopy={(item) => void handleCopy(item)}
+              onCopyImage={(item, mode) => void handleCopyImage(item, mode)}
+              onPin={(item) => void pinItem(item.id)}
+              onDelete={(item) => void deleteItem(item.id)}
+              selectedIds={selected}
+              onToggleSelect={toggleSelect}
+              duplicateOf={duplicateOf}
+            />
+            {total > items.length ? (
+              <div className="flex justify-center py-3">
+                <button
+                  type="button"
+                  className="cv-btn cv-btn-secondary text-xs"
+                  onClick={() => setLimit((n) => n + 80)}
+                >
+                  加载更多（{items.length}/{total}）
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>

@@ -111,6 +111,7 @@ export default function SettingsPage(): JSX.Element {
   const {
     status: updateStatus,
     info: updateInfo,
+    packaged: updatePackaged,
     check: checkUpdate,
     channel: updateChannel,
     setChannel: setUpdateChannel,
@@ -455,7 +456,7 @@ export default function SettingsPage(): JSX.Element {
             >
               <Shield size={18} style={{ color: 'var(--primary)' }} className="mt-0.5 shrink-0" />
               <div className="text-sm text-muted-foreground leading-relaxed">
-                打开应用即自动开库。可选 Windows Hello / 触控 ID 作为额外确认；恢复短语用于灾难恢复，不是日常登录。
+                打开应用即自动开库。可选本机会话校验（Windows DPAPI）或触控 ID 作为敏感操作确认；恢复短语用于灾难恢复，不是日常登录。
               </div>
             </div>
             <div className="mt-4">
@@ -1024,6 +1025,10 @@ export default function SettingsPage(): JSX.Element {
                 type="button"
                 className="cv-btn cv-btn-secondary text-xs"
                 onClick={() => {
+                  if (!updatePackaged) {
+                    showPixelToast('开发态不检查更新，请用安装包')
+                    return
+                  }
                   void checkUpdate().then((info) => {
                     if (info?.version) {
                       showPixelToast(`发现 ${info.version}`)

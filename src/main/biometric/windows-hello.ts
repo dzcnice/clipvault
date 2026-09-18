@@ -1,17 +1,16 @@
 /**
- * Windows Hello 适配层
+ * Windows 会话校验适配层（文件名历史遗留，不是真 Hello UI）
  *
- * Electron 31 未原生暴露 WinRT Hello API；Anthropic Windows 阵线上
- * 对 DEK 的可信保管由 DPAPI（safeStorage）提供。因此此层实际是
- * "safeStorage 是否可用 + 当前用户会话有效"。
- * 调用点：biometric/index.ts
+ * Electron 不暴露 WinRT Hello 对话框。DEK 由 DPAPI（safeStorage）保管。
+ * isAvailable = 当前用户能用 safeStorage；verify 对解锁路径恒 true，
+ * 敏感操作确认走 confirm.ts 的 DPAPI 解包，不弹系统生物识别窗。
  */
 
 import * as osCrypto from '../crypto'
 
 export interface WindowsHelloAdapter {
   isAvailable(): boolean
-  /** Windows 上 "确认身份" 步骤由 OS 锁屏/登录会话隐含提供。此处直接 true。 */
+  /** 解锁路径不弹窗；敏感确认请用 confirmViaDpapiEnrollment。 */
   verify(_reason: string): Promise<boolean>
 }
 

@@ -47,10 +47,8 @@ if (isJsdom) {
         vault: {},
         clipboard: {},
         credential: {},
-        sprint11: {
-          totp: {},
-          password: {}
-        }
+        totp: {},
+        password: {}
       }
     })
   }

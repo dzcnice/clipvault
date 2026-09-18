@@ -15,7 +15,7 @@ interface Props {
   className?: string
 }
 
-const ACCENT = 'oklch(0.72 0.16 45)' // 琥珀
+const ACCENT = 'var(--primary)'
 
 function relativeTime(ts: number | undefined | null): string {
   if (!ts || typeof ts !== 'number') return '未知'
@@ -44,18 +44,11 @@ function initials(name: string): string {
 
 function CredentialRow({ c }: { c: Credential }): JSX.Element {
   return (
-    <li
-      className="flex items-center gap-3 rounded-xl px-3 py-2 transition-colors"
-      style={{
-        background: 'rgba(255,255,255,0.35)',
-        border: '1px solid rgba(255,255,255,0.3)'
-      }}
-    >
+    <li className="cv-list-row">
       <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold tracking-tight"
+        className="cv-icon-slot !h-8 !w-8 text-[11px] font-semibold tracking-tight"
         style={{
-          background: `color-mix(in oklch, ${ACCENT} 22%, transparent)`,
-          border: `1px solid color-mix(in oklch, ${ACCENT} 40%, transparent)`,
+          background: 'var(--primary-soft)',
           color: ACCENT
         }}
         aria-hidden
@@ -94,17 +87,14 @@ export function RecentCredentialsCard({ state, className }: Props): JSX.Element 
       error={state.error}
       empty={!state.loading && !state.error && list.length === 0}
       emptyNode={
-        <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 text-center">
+        <div className="cv-empty py-8">
           <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{
-              background: `color-mix(in oklch, ${ACCENT} 12%, transparent)`,
-              border: `1px dashed color-mix(in oklch, ${ACCENT} 35%, transparent)`
-            }}
+            className="cv-icon-slot !h-12 !w-12"
+            style={{ background: 'var(--primary-soft)', color: ACCENT }}
           >
-            <Key size={24} strokeWidth={1.5} style={{ color: ACCENT, opacity: 0.8 }} />
+            <Key size={20} strokeWidth={1.75} />
           </div>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="font-body text-xs" style={{ color: 'var(--ink-faint)' }}>
             凭证库是空的，快去添加一条吧
           </p>
           <button
@@ -113,12 +103,7 @@ export function RecentCredentialsCard({ state, className }: Props): JSX.Element 
               e.stopPropagation()
               navigate('/credentials')
             }}
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium transition-all hover:scale-105"
-            style={{
-              background: `color-mix(in oklch, ${ACCENT} 28%, transparent)`,
-              border: `1px solid color-mix(in oklch, ${ACCENT} 45%, transparent)`,
-              color: 'oklch(0.45 0.14 45)'
-            }}
+            className="cv-btn cv-btn-primary text-[11px]"
           >
             <Plus size={12} />
             添加凭证

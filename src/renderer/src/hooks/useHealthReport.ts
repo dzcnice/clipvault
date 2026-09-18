@@ -22,10 +22,10 @@ function getApi(): Sprint11HealthAPI | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint11?: { health?: Sprint11HealthAPI } }
+      api?: { health?: Sprint11HealthAPI }
     }
   ).api
-  return api?.sprint11?.health ?? null
+  return api?.health ?? null
 }
 
 export interface UseHealthReport {

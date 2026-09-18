@@ -28,7 +28,7 @@ interface Props {
   state: DashboardData['todayClips']
 }
 
-const ACCENT = 'oklch(0.72 0.16 250)' // 蓝
+const ACCENT = 'var(--primary)'
 
 function formatTime(ts: number | undefined | null): string {
   if (!ts || typeof ts !== 'number') return '--:--'
@@ -52,9 +52,9 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   if (it.detectedKeyType) {
     return {
       icon: KeyRound,
-      accent: 'oklch(0.72 0.16 45)',
+      accent: 'var(--primary)',
       label: it.detectedKeyType,
-      summary: content.slice(0, 80) || '（敏感内容已遮罩）'
+      summary: '（敏感内容已遮罩）'
     }
   }
 
@@ -62,7 +62,7 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   if (it.type === ClipboardContentType.IMAGE) {
     return {
       icon: ImageIcon,
-      accent: 'oklch(0.7 0.15 330)',
+      accent: 'var(--ink)',
       label: '图片',
       summary: `${Math.round((it.size ?? 0) / 1024)} KB 图片`
     }
@@ -72,7 +72,7 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   if (it.type === ClipboardContentType.FILE) {
     return {
       icon: FileText,
-      accent: 'oklch(0.7 0.06 270)',
+      accent: 'var(--ink-soft)',
       label: '文件',
       summary: it.filePath || content || '文件引用'
     }
@@ -82,7 +82,7 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   if (content && /^https?:\/\//i.test(content)) {
     return {
       icon: LinkIcon,
-      accent: 'oklch(0.72 0.16 210)',
+      accent: 'var(--success)',
       label: '链接',
       summary: content.slice(0, 80)
     }
@@ -95,7 +95,7 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   ) {
     return {
       icon: Code2,
-      accent: 'oklch(0.7 0.15 160)',
+      accent: 'var(--success)',
       label: '代码',
       summary: content.replace(/\s+/g, ' ').slice(0, 80)
     }
@@ -104,7 +104,7 @@ function pickMeta(it: ClipboardItem): ItemMeta {
   // 默认：文本
   return {
     icon: FileText,
-    accent: 'oklch(0.72 0.16 250)',
+    accent: 'var(--ink)',
     label: '文本',
     summary: content.slice(0, 80) || '（空白内容）'
   }
@@ -130,20 +130,17 @@ function TimelineRow({ it, isLast }: TimelineRowProps): JSX.Element {
       {/* 轴 + 圆点 */}
       <div className="relative flex shrink-0 flex-col items-center" aria-hidden>
         <div
-          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2"
+          className="mt-1.5 h-2.5 w-2.5 shrink-0"
           style={{
             background: meta.accent,
-            boxShadow: `0 0 8px color-mix(in oklch, ${meta.accent} 55%, transparent)`,
-            // ring 颜色
-            ['--tw-ring-color' as string]: 'rgba(255,255,255,0.85)'
+            border: 'var(--px-border) solid var(--line)'
           }}
         />
         {!isLast && (
           <div
             className="mt-0.5 w-px flex-1"
             style={{
-              background:
-                'linear-gradient(to bottom, rgba(255,255,255,0.55), rgba(255,255,255,0.12))',
+              background: 'var(--line-soft)',
               minHeight: 28
             }}
           />
@@ -154,12 +151,8 @@ function TimelineRow({ it, isLast }: TimelineRowProps): JSX.Element {
       <div className="min-w-0 flex-1 pb-3">
         <div className="flex items-center gap-2">
           <div
-            className="flex h-5 items-center gap-1 rounded-md px-1.5 text-[10px] font-medium"
-            style={{
-              background: `color-mix(in oklch, ${meta.accent} 18%, transparent)`,
-              color: meta.accent,
-              border: `1px solid color-mix(in oklch, ${meta.accent} 35%, transparent)`
-            }}
+            className="cv-badge flex h-5 items-center gap-1 px-1.5 text-[10px] font-medium"
+            style={{ color: meta.accent }}
           >
             <meta.icon size={10} strokeWidth={2} />
             {meta.label}
@@ -201,27 +194,20 @@ export function ActivityTimelineCard({ state }: Props): JSX.Element {
       error={state.error}
       empty={!state.loading && !state.error && (!data || data.count === 0)}
       emptyNode={
-        <div className="flex min-h-[220px] flex-col items-center justify-center gap-3">
+        <div className="cv-empty py-10">
           <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{
-              background: `color-mix(in oklch, ${ACCENT} 12%, transparent)`,
-              border: `1px dashed color-mix(in oklch, ${ACCENT} 35%, transparent)`
-            }}
+            className="cv-icon-slot !h-12 !w-12"
+            style={{ background: 'var(--primary-soft)', color: ACCENT }}
           >
-            <ClipboardList
-              size={26}
-              strokeWidth={1.5}
-              style={{ color: ACCENT, opacity: 0.8 }}
-            />
+            <ClipboardList size={20} strokeWidth={1.75} />
           </div>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="font-body text-xs" style={{ color: 'var(--ink-faint)' }}>
             今天还没有复制任何内容
           </p>
         </div>
       }
       onClick={() => navigate('/clipboard')}
-      className="h-full min-h-[320px]"
+      className="h-full"
       footer={
         data ? (
           <div className="flex items-center justify-between">
@@ -249,12 +235,7 @@ export function ActivityTimelineCard({ state }: Props): JSX.Element {
           ))}
         </ul>
       ) : data && items.length === 0 ? (
-        <div
-          className="flex min-h-[160px] items-center justify-center text-xs"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          今日还没有剪贴板活动
-        </div>
+        <div className="cv-empty py-8 font-body text-xs">今日还没有剪贴板活动</div>
       ) : null}
     </DashboardCard>
   )

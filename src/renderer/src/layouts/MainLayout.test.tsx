@@ -21,7 +21,7 @@ function renderLayout(): void {
 
 beforeEach(() => {
   localStorage.clear()
-  // useUpdater 在无 sprint14 API 时安全降级
+  // useUpdater 在无 updater API 时安全降级
   ;(window as unknown as { api?: unknown }).api = {
     system: {
       getVersion: async () => ({

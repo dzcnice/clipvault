@@ -2,8 +2,11 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
+const CV_BUILT_AT = JSON.stringify(new Date().toISOString())
+
 export default defineConfig({
   main: {
+    define: { __CV_BUILT_AT__: CV_BUILT_AT },
     plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: {
@@ -22,6 +25,7 @@ export default defineConfig({
     }
   },
   renderer: {
+    define: { __CV_BUILT_AT__: CV_BUILT_AT },
     resolve: {
       alias: {
         '@': resolve('src'),

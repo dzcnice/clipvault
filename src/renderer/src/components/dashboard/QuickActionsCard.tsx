@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import DashboardCard from './DashboardCard'
 import { openCommandPalette } from '../CommandPalette'
 
-const ACCENT = 'oklch(0.68 0.16 255)'
+const ACCENT = 'var(--primary)'
 
 interface ActionRowProps {
   icon: LucideIcon
@@ -25,22 +25,10 @@ function ActionRow({ icon: Icon, label, shortcut, onClick }: ActionRowProps): JS
         e.stopPropagation()
         onClick()
       }}
-      className="group/row flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
-      style={{
-        background: 'var(--surface-2)',
-        borderColor: 'var(--border-subtle)'
-      }}
+      className="cv-btn cv-btn-secondary w-full justify-start text-xs"
     >
-      <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-        style={{
-          background: 'oklch(0.68 0.16 255 / 0.15)',
-          color: ACCENT
-        }}
-      >
-        <Icon size={14} strokeWidth={1.75} />
-      </div>
-      <span className="flex-1 truncate text-xs font-medium text-foreground">{label}</span>
+      <Icon size={14} strokeWidth={2} style={{ color: ACCENT }} />
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {shortcut ? (
         <kbd className="cv-badge font-mono tabular-nums">{shortcut}</kbd>
       ) : null}

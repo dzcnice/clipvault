@@ -49,7 +49,7 @@ export function BiometricToggle({ onRequestPassword }: Props): JSX.Element {
 
   const platformLabel =
     availability?.mechanism === 'dpapi'
-      ? 'Windows Hello（系统钥匙串）'
+      ? 'Windows 本机用户会话校验（DPAPI，无 Hello 弹窗）'
       : availability?.mechanism === 'touch-id'
         ? 'macOS Touch ID'
         : '当前平台不支持'

@@ -1,11 +1,11 @@
 /**
  * UrlPreview (Sprint 11 · TASK-060)
  *
- * 调 IPC sprint11.preview.fetchUrlMeta 抓 og:* meta 展示卡片。
+ * 调 IPC preview.fetchUrlMeta 抓 og:* meta 展示卡片。
  */
 
 import React, { useEffect, useState } from 'react'
-import type { UrlMetaWire } from '../../../../preload/sprint11-api'
+import type { UrlMetaWire } from '../../../../preload/tools-api'
 
 interface Sprint11PreviewAPI {
   fetchUrlMeta: (
@@ -18,10 +18,10 @@ function getApi(): Sprint11PreviewAPI | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint11?: { preview?: Sprint11PreviewAPI } }
+      api?: { preview?: Sprint11PreviewAPI }
     }
   ).api
-  return api?.sprint11?.preview ?? null
+  return api?.preview ?? null
 }
 
 export interface UrlPreviewProps {

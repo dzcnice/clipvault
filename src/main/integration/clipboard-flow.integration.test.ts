@@ -29,7 +29,9 @@ vi.mock('electron', () => {
       readImage: () => ({
         isEmpty: () => fakeClipImage.isEmpty,
         toDataURL: () => fakeClipImage.data,
-        toJPEG: () => Buffer.alloc(0)
+        toJPEG: () => Buffer.alloc(0),
+        getSize: () => ({ width: 0, height: 0 }),
+        toBitmap: () => Buffer.alloc(0)
       }),
       readHTML: () => '',
       availableFormats: () => (fakeClipText ? ['text/plain'] : [])

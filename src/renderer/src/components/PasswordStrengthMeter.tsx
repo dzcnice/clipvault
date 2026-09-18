@@ -19,10 +19,10 @@ function getApi(): Sprint11PasswordAPI | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint11?: { password?: Sprint11PasswordAPI } }
+      api?: { password?: Sprint11PasswordAPI }
     }
   ).api
-  return api?.sprint11?.password ?? null
+  return api?.password ?? null
 }
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981']

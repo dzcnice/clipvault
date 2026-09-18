@@ -1,5 +1,5 @@
 /**
- * Sprint 14 API · 更新 + 导入（无 webhook）
+ * 自动更新 + 第三方导入 preload API → window.api.updater / window.api.importer
  */
 
 import { ipcRenderer } from 'electron'
@@ -9,7 +9,8 @@ import {
   type UpdateChannel,
   type UpdateInfoPayload,
   type UpdaterEvent,
-  type UpdaterDiagnostics
+  type UpdaterDiagnostics,
+  type UpdaterStatePayload
 } from '../types/updater'
 import {
   IMPORT_CHANNELS,
@@ -17,8 +18,7 @@ import {
   type ImportRequest
 } from '../types/import'
 
-export const sprint14API = {
-  updater: {
+export const updaterAPI = {
     check: (): Promise<ApiResponse<UpdateInfoPayload | null>> =>
       ipcRenderer.invoke(UPDATER_CHANNELS.CHECK),
     download: (): Promise<ApiResponse<boolean>> =>
@@ -27,9 +27,8 @@ export const sprint14API = {
       ipcRenderer.invoke(UPDATER_CHANNELS.QUIT_AND_INSTALL),
     setChannel: (channel: UpdateChannel): Promise<ApiResponse<boolean>> =>
       ipcRenderer.invoke(UPDATER_CHANNELS.SET_CHANNEL, { channel }),
-    getState: (): Promise<
-      ApiResponse<UpdaterEvent & { channel: UpdateChannel }>
-    > => ipcRenderer.invoke(UPDATER_CHANNELS.GET_STATE),
+    getState: (): Promise<ApiResponse<UpdaterStatePayload>> =>
+      ipcRenderer.invoke(UPDATER_CHANNELS.GET_STATE),
     getDiagnostics: (): Promise<ApiResponse<UpdaterDiagnostics>> =>
       ipcRenderer.invoke(UPDATER_CHANNELS.GET_DIAGNOSTICS),
     openReleasePage: (): Promise<ApiResponse<boolean>> =>
@@ -40,16 +39,16 @@ export const sprint14API = {
       ipcRenderer.on(UPDATER_CHANNELS.EVENT, handler)
       return () => ipcRenderer.removeListener(UPDATER_CHANNELS.EVENT, handler)
     }
-  },
-
-  import: {
-    parse: (req: ImportRequest): Promise<ApiResponse<ImportParseResult>> =>
-      ipcRenderer.invoke(IMPORT_CHANNELS.PARSE, req),
-    commit: (
-      items: ImportParseResult['items']
-    ): Promise<ApiResponse<{ count: number; skipped: number }>> =>
-      ipcRenderer.invoke(IMPORT_CHANNELS.COMMIT, { items })
-  }
 }
 
-export type Sprint14API = typeof sprint14API
+export const importerAPI = {
+  parse: (req: ImportRequest): Promise<ApiResponse<ImportParseResult>> =>
+    ipcRenderer.invoke(IMPORT_CHANNELS.PARSE, req),
+  commit: (
+    items: ImportParseResult['items']
+  ): Promise<ApiResponse<{ count: number; skipped: number }>> =>
+    ipcRenderer.invoke(IMPORT_CHANNELS.COMMIT, { items })
+}
+
+export type UpdaterAPI = typeof updaterAPI
+export type ImporterAPI = typeof importerAPI

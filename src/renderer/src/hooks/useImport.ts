@@ -27,10 +27,10 @@ function getApi(): ImportAPIShape | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint14?: { import?: ImportAPIShape } }
+      api?: { importer?: ImportAPIShape }
     }
   ).api
-  return api?.sprint14?.import ?? null
+  return api?.importer ?? null
 }
 
 export interface UseImportState {

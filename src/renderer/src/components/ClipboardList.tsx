@@ -3,6 +3,7 @@
  * 图片项支持：复制图片 / 仅路径 / 图+路径
  */
 
+import { useEffect, useState } from 'react'
 import type { ClipboardItem } from '@/types'
 import {
   Clipboard as ClipboardIcon,
@@ -30,6 +31,42 @@ function formatTime(timestamp: number): string {
   if (hours < 24) return `${hours} 小时前`
   if (days < 7) return `${days} 天前`
   return new Date(timestamp).toLocaleDateString('zh-CN')
+}
+
+function ClipThumb({
+  id,
+  imageData
+}: {
+  id: string
+  imageData?: string
+}): JSX.Element | null {
+  const [src, setSrc] = useState<string | undefined>(imageData)
+  useEffect(() => {
+    if (imageData) {
+      setSrc(imageData)
+      return
+    }
+    let cancelled = false
+    void window.api.clipboard
+      .getThumbnail?.(id)
+      .then((res) => {
+        if (!cancelled && res.success && res.data) setSrc(res.data)
+      })
+      .catch(() => {
+        /* ignore */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id, imageData])
+  if (!src) return null
+  return (
+    <img
+      src={src}
+      alt=""
+      className="mb-2 max-h-28 max-w-full border-2 border-[var(--line)]"
+    />
+  )
 }
 
 function TypeIcon({ type }: { type: string }): JSX.Element {
@@ -128,13 +165,9 @@ export default function ClipboardList({
           </div>
 
           <div className="min-w-0 flex-1">
-            {item.type === 'image' && item.imageData && (
-              <img
-                src={item.imageData}
-                alt=""
-                className="mb-2 max-h-28 max-w-full border-2 border-[var(--line)]"
-              />
-            )}
+            {item.type === 'image' ? (
+              <ClipThumb id={item.id} imageData={item.imageData} />
+            ) : null}
             {(item.type === 'text' || item.type === 'html') && (
               <div className="font-body line-clamp-3 whitespace-pre-wrap break-all text-[13.5px] leading-relaxed text-foreground">
                 {item.preview}

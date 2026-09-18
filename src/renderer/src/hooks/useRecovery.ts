@@ -33,10 +33,10 @@ function getApi(): RecoveryAPIShape | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint13?: { recovery?: RecoveryAPIShape } }
+      api?: { security?: { recovery?: RecoveryAPIShape } }
     }
   ).api
-  return api?.sprint13?.recovery ?? null
+  return api?.security?.recovery ?? null
 }
 
 export interface UseRecoveryState {

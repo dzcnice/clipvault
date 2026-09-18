@@ -5,7 +5,27 @@
 import { useEffect, useState } from 'react'
 import { Download, RefreshCw, AlertCircle, Sparkles } from 'lucide-react'
 import { useUpdater } from '@renderer/hooks/useUpdater'
+import type { UpdaterStatus } from '../../../types/updater'
 import { showPixelToast } from './PixelToast'
+
+export function sidebarUpdateLabel(input: {
+  packaged: boolean
+  status: UpdaterStatus
+  busy: boolean
+  version?: string
+  percent?: number
+}): string {
+  if (!input.packaged) return '开发版'
+  if (input.status === 'checking' || input.busy) return '检查中…'
+  if (input.status === 'available') return `更新 ${input.version ?? ''}`.trim()
+  if (input.status === 'downloading') {
+    return `下载 ${Math.round(input.percent ?? 0)}%`
+  }
+  if (input.status === 'downloaded') return '重启安装'
+  if (input.status === 'error') return '更新失败'
+  if (input.status === 'not-available') return '已是最新'
+  return '检查更新'
+}
 
 export function SidebarUpdateButton(): JSX.Element {
   const {
@@ -13,6 +33,7 @@ export function SidebarUpdateButton(): JSX.Element {
     info,
     progress,
     error,
+    packaged,
     check,
     download,
     quitAndInstall
@@ -26,26 +47,24 @@ export function SidebarUpdateButton(): JSX.Element {
     }
   }, [status, info?.version])
 
-  const label = ((): string => {
-    if (status === 'checking' || busy) return '检查中…'
-    if (status === 'available') return `更新 ${info?.version ?? ''}`.trim()
-    if (status === 'downloading') {
-      return `下载 ${Math.round(progress?.percent ?? 0)}%`
-    }
-    if (status === 'downloaded') return '重启安装'
-    if (status === 'error') return '更新失败'
-    if (status === 'not-available') return '已是最新'
-    return '检查更新'
-  })()
+  const label = sidebarUpdateLabel({
+    packaged,
+    status,
+    busy,
+    version: info?.version,
+    percent: progress?.percent
+  })
 
   const Icon =
-    status === 'error'
-      ? AlertCircle
-      : status === 'available' || status === 'downloaded'
-        ? Sparkles
-        : status === 'downloading'
-          ? Download
-          : RefreshCw
+    !packaged
+      ? RefreshCw
+      : status === 'error'
+        ? AlertCircle
+        : status === 'available' || status === 'downloaded'
+          ? Sparkles
+          : status === 'downloading'
+            ? Download
+            : RefreshCw
 
   const accent =
     status === 'error'
@@ -56,6 +75,10 @@ export function SidebarUpdateButton(): JSX.Element {
 
   const onClick = async (): Promise<void> => {
     if (busy) return
+    if (!packaged) {
+      showPixelToast('开发态不检查更新，请用安装包')
+      return
+    }
     setBusy(true)
     try {
       if (status === 'available') {
@@ -79,8 +102,9 @@ export function SidebarUpdateButton(): JSX.Element {
     }
   }
 
-  const title =
-    status === 'error'
+  const title = !packaged
+    ? '开发态不走自动更新'
+    : status === 'error'
       ? error || '更新失败，点击重试'
       : status === 'available'
         ? `有新版本 ${info?.version}，点击下载`
@@ -88,7 +112,9 @@ export function SidebarUpdateButton(): JSX.Element {
           ? '点击重启完成安装'
           : status === 'downloading'
             ? '正在下载更新…'
-            : '检查更新（自动检测已开启）'
+            : status === 'not-available'
+              ? '已是最新版本'
+              : '检查更新（自动检测已开启）'
 
   return (
     <button
@@ -96,7 +122,7 @@ export function SidebarUpdateButton(): JSX.Element {
       data-testid="sidebar-update-btn"
       title={title}
       onClick={() => void onClick()}
-      disabled={busy || status === 'downloading' || status === 'checking'}
+      disabled={busy || status === 'downloading' || (packaged && status === 'checking')}
       className="mt-1 flex w-full items-center gap-1.5 rounded-md border-2 px-2 py-1.5 text-left font-body text-[11px] transition-colors hover:bg-[var(--primary-soft)] disabled:opacity-60"
       style={{
         borderColor: 'var(--line)',
@@ -107,7 +133,7 @@ export function SidebarUpdateButton(): JSX.Element {
       <Icon
         size={12}
         strokeWidth={2.5}
-        className={status === 'checking' || status === 'downloading' ? 'animate-spin' : ''}
+        className={packaged && (status === 'checking' || status === 'downloading') ? 'animate-spin' : ''}
       />
       <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
     </button>

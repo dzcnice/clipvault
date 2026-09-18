@@ -10,17 +10,15 @@ import { CommandInput } from './CommandInput'
 import { CommandList } from './CommandList'
 import { useHudKeyboardNav } from './useKeyboardNav'
 
-interface Sprint6APILike {
-  hud: {
-    hide: () => Promise<{ success: boolean }>
-    onShown: (cb: () => void) => () => void
-    onHidden: (cb: () => void) => () => void
-  }
+interface HudAPILike {
+  hide: () => Promise<{ success: boolean }>
+  onShown: (cb: () => void) => () => void
+  onHidden: (cb: () => void) => () => void
 }
 
-function getApi(): Sprint6APILike | null {
+function getApi(): HudAPILike | null {
   if (typeof window === 'undefined') return null
-  return (window as unknown as { api?: { sprint6?: Sprint6APILike } }).api?.sprint6 ?? null
+  return (window as unknown as { api?: { hud?: HudAPILike } }).api?.hud ?? null
 }
 
 export function CommandRoot(): JSX.Element {
@@ -46,7 +44,7 @@ export function CommandRoot(): JSX.Element {
       inputRef.current?.focus()
       return
     }
-    const offShown = api.hud.onShown(() => {
+    const offShown = api.onShown(() => {
       setValue('')
       requestAnimationFrame(() => inputRef.current?.focus())
     })
@@ -61,7 +59,7 @@ export function CommandRoot(): JSX.Element {
       await cmd.perform()
     } finally {
       const api = getApi()
-      if (api) await api.hud.hide()
+      if (api) await api.hide()
     }
   }
 

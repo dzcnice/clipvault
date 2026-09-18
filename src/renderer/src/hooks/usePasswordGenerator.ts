@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react'
 import type {
   StrongPasswordOptsWire,
   PassphraseOptsWire
-} from '../../../preload/sprint11-api'
+} from '../../../preload/tools-api'
 
 interface Sprint11PasswordAPI {
   generateStrong: (
@@ -30,10 +30,10 @@ function getApi(): Sprint11PasswordAPI | null {
   if (typeof window === 'undefined') return null
   const api = (
     window as unknown as {
-      api?: { sprint11?: { password?: Sprint11PasswordAPI } }
+      api?: { password?: Sprint11PasswordAPI }
     }
   ).api
-  return api?.sprint11?.password ?? null
+  return api?.password ?? null
 }
 
 export function usePasswordGenerator(): {

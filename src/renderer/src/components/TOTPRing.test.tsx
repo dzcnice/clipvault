@@ -8,13 +8,11 @@ import { TOTPRing } from './TOTPRing'
 
 function setupApi(code: string, remainingMs: number, periodMs = 30000): void {
   (window as unknown as { api: Record<string, unknown> }).api = {
-    sprint11: {
-      totp: {
-        generate: vi.fn(async () => ({
-          success: true,
-          data: { code, remainingMs, periodMs }
-        }))
-      }
+    totp: {
+      generate: vi.fn(async () => ({
+        success: true,
+        data: { code, remainingMs, periodMs }
+      }))
     }
   }
 }
@@ -86,7 +84,7 @@ describe('TOTPRing', () => {
   it('无 credentialId 不调用 api', () => {
     const gen = vi.fn()
     ;(window as unknown as { api: Record<string, unknown> }).api = {
-      sprint11: { totp: { generate: gen } }
+      totp: { generate: gen }
     }
     render(<TOTPRing credentialId="" />)
     expect(gen).not.toHaveBeenCalled()

@@ -18,10 +18,10 @@ async function hideHud(): Promise<void> {
   try {
     const api = (
       window as unknown as {
-        api?: { sprint6?: { hud?: { hide?: () => Promise<unknown> } }; hud?: { hide?: () => Promise<unknown> } }
+        api?: { hud?: { hide?: () => Promise<unknown> } }
       }
     ).api
-    await (api?.sprint6?.hud?.hide?.() ?? api?.hud?.hide?.())
+    await api?.hud?.hide?.()
   } catch {
     /* ignore */
   }

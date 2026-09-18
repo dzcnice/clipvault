@@ -16,24 +16,22 @@ import {
 } from 'lucide-react'
 import type { HudCommand, HudCommandSource } from '../types'
 
-interface Sprint6APILike {
-  hud: {
-    navigate: (path: string) => Promise<{ success: boolean }>
-    hide: () => Promise<{ success: boolean }>
-  }
+interface HudAPILike {
+  navigate: (path: string) => Promise<{ success: boolean }>
+  hide: () => Promise<{ success: boolean }>
 }
 
-function getApi(): Sprint6APILike | null {
+function getApi(): HudAPILike | null {
   if (typeof window === 'undefined') return null
-  const api = (window as unknown as { api?: { sprint6?: Sprint6APILike } }).api
-  return api?.sprint6 ?? null
+  const api = (window as unknown as { api?: { hud?: HudAPILike } }).api
+  return api?.hud ?? null
 }
 
 function nav(path: string): () => Promise<void> {
   return async () => {
     const api = getApi()
     if (api) {
-      await api.hud.navigate(path)
+      await api.navigate(path)
     }
   }
 }
@@ -109,7 +107,7 @@ export function buildNavigateCommands(): HudCommand[] {
           await anyWin.api?.vault?.ensureOpen?.()
         } finally {
           const api = getApi()
-          await api?.hud.hide()
+          await api?.hide()
         }
       }
     },
@@ -134,7 +132,7 @@ export function buildNavigateCommands(): HudCommand[] {
           }
         } finally {
           const api = getApi()
-          await api?.hud.hide()
+          await api?.hide()
         }
       }
     }

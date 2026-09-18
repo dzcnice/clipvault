@@ -17,10 +17,7 @@ import type { CreateClipboardItemInput } from '../../types'
 import { detectCurrentClipboardFiles } from './file-clip-detector'
 import { getForegroundAppName, isAppExcluded, refreshForegroundAppName } from './source-app'
 
-/**
- * Batch 2C：剪贴板文件列表事件
- * 当系统剪贴板里是"文件复制"而非文本/图片时发出，供 UI 提示是否发送到团队。
- */
+/** 资源管理器复制文件时发出；个人版同时会走 change(type=file) 入库 */
 export interface ClipboardFileListEvent {
   type: 'file-list'
   paths: string[]
@@ -78,6 +75,14 @@ export class ClipboardMonitor extends EventEmitter {
   private excludedApps: string[] = []
   private minClipboardLength: number = 0
   private lastSourceApp: string = ''
+  /** 内容 hash + 来源，避免「排除应用跳过」后同内容从其它应用无法再记 */
+  private lastFingerprint: string = ''
+  private lastWasExcluded = false
+  private lastExcludeRecheckAt = 0
+  /** 每次系统剪贴板内容变化 +1；截图异步落盘后用它判断是否还能写回 */
+  private generation = 0
+  private checking = false
+  private pendingKeyChange: ClipboardChangeEvent | null = null
 
   constructor(options?: {
     pollInterval?: number
@@ -104,11 +109,12 @@ export class ClipboardMonitor extends EventEmitter {
 
     this.isRunning = true
 
-    // 初始化最后的哈希值
     this.lastHash = this.getCurrentHash()
+    this.lastFingerprint = `${this.lastHash}\0`
+    this.lastWasExcluded = false
 
     this.intervalId = setInterval(() => {
-      this.checkClipboard()
+      void this.checkClipboard()
     }, this.pollInterval)
 
     logger.info(`[ClipboardMonitor] Started with ${this.pollInterval}ms interval`)
@@ -133,6 +139,18 @@ export class ClipboardMonitor extends EventEmitter {
       isRunning: this.isRunning,
       interval: this.pollInterval
     }
+  }
+
+  /** 剪贴板内容世代：截图入库期间若已变化，调用方应跳过写回 */
+  getGeneration(): number {
+    return this.generation
+  }
+
+  /** 密钥拦截结束后再写入历史 */
+  flushPendingKeyChange(): void {
+    const ev = this.pendingKeyChange
+    this.pendingKeyChange = null
+    if (ev) this.emit('change', ev)
   }
 
   /** 更新设置 */
@@ -170,57 +188,94 @@ export class ClipboardMonitor extends EventEmitter {
     }
   }
 
-  /** 检查剪贴板变化 */
-  private checkClipboard(): void {
+  /** 检查剪贴板变化（排除判定完成前不提交 lastHash） */
+  private async checkClipboard(): Promise<void> {
+    if (this.checking) return
+    this.checking = true
     try {
-      const currentHash = this.getCurrentHash()
+      const contentHash = this.getCurrentHash()
+      const sameContent = contentHash === this.lastHash
 
-      if (currentHash !== this.lastHash) {
-        this.lastHash = currentHash
-        this.handleClipboardChange()
+      if (sameContent && !this.lastWasExcluded) return
+
+      if (sameContent && this.lastWasExcluded) {
+        const now = Date.now()
+        if (now - this.lastExcludeRecheckAt < 1500) return
+        this.lastExcludeRecheckAt = now
       }
+
+      const sourceApp = await this.resolveSourceApp(!sameContent)
+      const fingerprint = `${contentHash}\0${sourceApp}`
+      if (fingerprint === this.lastFingerprint) return
+
+      if (!sameContent) {
+        this.generation += 1
+        clipboardAutoClear.cancel()
+      }
+
+      if (isAppExcluded(sourceApp, this.excludedApps)) {
+        this.lastHash = contentHash
+        this.lastFingerprint = fingerprint
+        this.lastWasExcluded = true
+        logger.info(`[ClipboardMonitor] skipped excluded app: ${sourceApp}`)
+        return
+      }
+
+      this.lastHash = contentHash
+      this.lastFingerprint = fingerprint
+      this.lastWasExcluded = false
+      this.emitClipboardChange(sourceApp)
     } catch (error) {
       logger.error('[ClipboardMonitor] Error checking clipboard:', error)
       this.emit('error', error)
+    } finally {
+      this.checking = false
     }
   }
 
-  /** 获取当前剪贴板内容的哈希值（B-6：复用 detectClipboardFormat + readClipboardByType） */
+  /** 有排除列表时必须 await 前台应用，避免用过期缓存误伤 */
+  private async resolveSourceApp(contentChanged: boolean): Promise<string> {
+    let sourceApp = getForegroundAppName() || this.lastSourceApp
+    if (this.excludedApps.length > 0 || this.lastWasExcluded) {
+      sourceApp = (await refreshForegroundAppName()) || sourceApp
+    } else if (contentChanged) {
+      void refreshForegroundAppName().then((n) => {
+        if (n) this.lastSourceApp = n
+      })
+    }
+    if (sourceApp) this.lastSourceApp = sourceApp
+    return sourceApp
+  }
+
+  /** 获取当前剪贴板内容的哈希值（文件列表优先，避免无 text/plain 时漏检） */
   private getCurrentHash(): string {
+    const files = detectCurrentClipboardFiles()
+    if (files.isFileList && files.paths.length > 0) {
+      return crypto.createHash('md5').update(`file:${files.paths.join('\n')}`).digest('hex')
+    }
     const type = detectClipboardFormat()
     let raw = ''
-    if (type) {
-      const read = readClipboardByType(type)
-      if (read) {
-        // 图片取前 1000 字符降低 hash 成本
-        raw =
-          type === ClipboardContentType.IMAGE
-            ? (read.imageData ?? '').substring(0, 1000)
-            : read.content ?? ''
+    if (type === ClipboardContentType.IMAGE) {
+      const image = clipboard.readImage()
+      if (!image.isEmpty()) {
+        const size = image.getSize()
+        const bmp = image.toBitmap()
+        const head = bmp.subarray(0, Math.min(512, bmp.length))
+        const tail = bmp.subarray(Math.max(0, bmp.length - 512))
+        raw = `img:${size.width}x${size.height}:${bmp.length}:${head.toString('hex')}:${tail.toString('hex')}`
       }
+    } else if (type) {
+      const read = readClipboardByType(type)
+      if (read) raw = read.content ?? ''
     }
     return crypto.createHash('md5').update(raw).digest('hex')
   }
 
-  /** 处理剪贴板变化 */
-  private handleClipboardChange(): void {
-    // v2.0 Sprint 13 TASK-068：新剪贴板内容到来时取消旧的 auto-clear 计时（已无意义）
-    clipboardAutoClear.cancel()
-
-    // 来源应用 + 排除列表（同步缓存；后台刷新供下次使用）
-    void refreshForegroundAppName().then((n) => {
-      if (n) this.lastSourceApp = n
-    })
-    const sourceApp = getForegroundAppName() || this.lastSourceApp
-    if (sourceApp) this.lastSourceApp = sourceApp
-    if (isAppExcluded(sourceApp, this.excludedApps)) {
-      logger.info(`[ClipboardMonitor] skipped excluded app: ${sourceApp}`)
-      return
-    }
-
-    // Batch 2C：优先识别文件列表（不入剪贴板历史，单独发 file-list 事件）
+  /** 处理已通过排除判定的剪贴板变化 */
+  private emitClipboardChange(sourceApp: string): void {
     const fileDetect = detectCurrentClipboardFiles()
     if (fileDetect.isFileList && fileDetect.paths.length > 0) {
+      const joined = fileDetect.paths.join('\n')
       logger.info(
         `[ClipboardMonitor] file-list detected: ${fileDetect.paths.length} file(s)`
       )
@@ -228,6 +283,12 @@ export class ClipboardMonitor extends EventEmitter {
         type: 'file-list',
         paths: fileDetect.paths
       } as ClipboardFileListEvent)
+      this.emit('change', {
+        type: ClipboardContentType.FILE,
+        filePath: joined,
+        content: joined,
+        sourceApp: sourceApp || undefined
+      })
       return
     }
 
@@ -302,30 +363,46 @@ export class ClipboardMonitor extends EventEmitter {
 
     if (event) {
       logger.info(`[ClipboardMonitor] New ${event.type} content detected`)
-      // TASK-023：单独广播 key-detected，让 key-intercept 订阅者第一时间拿到
-      // 注意：这里仅 emit 事件，不改变 'change' 流程，由订阅者决定是否阻断后续广播
       if (event.detectedKeyType && event.content) {
+        if (this.pendingKeyChange) {
+          this.emit('change', this.pendingKeyChange)
+          this.pendingKeyChange = null
+        }
         this.emit('key-detected', {
           content: event.content,
           detectedKeyType: event.detectedKeyType,
           type: event.type
         })
+        this.pendingKeyChange = event
+        return
+      }
+      if (this.pendingKeyChange) {
+        this.emit('change', this.pendingKeyChange)
+        this.pendingKeyChange = null
       }
       this.emit('change', event)
     }
   }
 
-  /** 手动写入剪贴板 */
+  /** 本进程写入后同步指纹，避免轮询把自写内容再入库 */
+  private rememberSelfWrite(): void {
+    this.lastHash = this.getCurrentHash()
+    this.lastFingerprint = `${this.lastHash}\0${this.lastSourceApp}`
+    this.lastWasExcluded = false
+    this.generation += 1
+  }
+
+  /** 手动写入剪贴板（凭证/片段复制应走这里，而不是 clipboard.writeText） */
   writeText(text: string): void {
     clipboard.writeText(text)
-    this.lastHash = this.getCurrentHash()
+    this.rememberSelfWrite()
   }
 
   /** 手动写入图片到剪贴板 */
   writeImage(dataUrl: string): void {
     const image = nativeImage.createFromDataURL(dataUrl)
     clipboard.writeImage(image)
-    this.lastHash = this.getCurrentHash()
+    this.rememberSelfWrite()
   }
 
   /** 路径含空格/特殊字符时加双引号，便于终端粘贴 */
@@ -349,7 +426,7 @@ export class ClipboardMonitor extends EventEmitter {
     try {
       if (mode === 'path') {
         clipboard.writeText(pathText)
-        this.lastHash = this.getCurrentHash()
+        this.rememberSelfWrite()
         logger.info(`[ClipboardMonitor] path-only on clipboard: ${pathText}`)
         return
       }
@@ -357,27 +434,27 @@ export class ClipboardMonitor extends EventEmitter {
       const image = nativeImage.createFromDataURL(dataUrl)
       if (image.isEmpty()) {
         if (mode !== 'image') clipboard.writeText(pathText)
-        this.lastHash = this.getCurrentHash()
+        this.rememberSelfWrite()
         return
       }
 
       if (mode === 'image') {
         clipboard.writeImage(image)
-        this.lastHash = this.getCurrentHash()
+        this.rememberSelfWrite()
         logger.info('[ClipboardMonitor] image-only on clipboard')
         return
       }
 
       // both
       clipboard.write({ text: pathText, image })
-      this.lastHash = this.getCurrentHash()
+      this.rememberSelfWrite()
       logger.info(`[ClipboardMonitor] image+path on clipboard: ${pathText}`)
     } catch (err) {
       logger.warn('[ClipboardMonitor] writeImagePaste failed, fallback text:', err)
       try {
         if (mode !== 'image') {
           clipboard.writeText(pathText)
-          this.lastHash = this.getCurrentHash()
+          this.rememberSelfWrite()
         }
       } catch {
         /* ignore */

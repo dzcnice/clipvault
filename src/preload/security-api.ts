@@ -3,14 +3,14 @@
  *
  * 整合方式：
  *   在 src/preload/index.ts 中：
- *     import { sprint13API } from './sprint13-api'
- *     const api = { ..., sprint13: sprint13API }
+ *     import { securityAPI } from './security-api'
+ *     const api = { ..., security: securityAPI }
  */
 
 import { ipcRenderer } from 'electron'
 import type { ApiResponse } from '../types'
 import {
-  SPRINT13_CHANNELS,
+  SECURITY_CHANNELS,
   type AutoClearEvent,
   type AutoClearStatus
 } from '../types/auto-clear'
@@ -36,22 +36,22 @@ import {
   type RecoveryVerifyMode
 } from '../types/recovery'
 
-export const sprint13API = {
+export const securityAPI = {
   autoClear: {
     schedule: (
       secret: string,
       ttlMs?: number
     ): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(SPRINT13_CHANNELS.AUTO_CLEAR_SCHEDULE, {
+      ipcRenderer.invoke(SECURITY_CHANNELS.AUTO_CLEAR_SCHEDULE, {
         secret,
         ttlMs
       }),
 
     cancel: (): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(SPRINT13_CHANNELS.AUTO_CLEAR_CANCEL),
+      ipcRenderer.invoke(SECURITY_CHANNELS.AUTO_CLEAR_CANCEL),
 
     status: (): Promise<ApiResponse<AutoClearStatus>> =>
-      ipcRenderer.invoke(SPRINT13_CHANNELS.AUTO_CLEAR_STATUS),
+      ipcRenderer.invoke(SECURITY_CHANNELS.AUTO_CLEAR_STATUS),
 
     /** 订阅 scheduled / cancelled / cleared / skipped 事件，返回 unsubscribe */
     onEvent: (callback: (event: AutoClearEvent) => void): (() => void) => {
@@ -59,18 +59,18 @@ export const sprint13API = {
         _ev: Electron.IpcRendererEvent,
         payload: AutoClearEvent
       ): void => callback(payload)
-      ipcRenderer.on(SPRINT13_CHANNELS.AUTO_CLEAR_EVENT, handler)
+      ipcRenderer.on(SECURITY_CHANNELS.AUTO_CLEAR_EVENT, handler)
       return () =>
-        ipcRenderer.removeListener(SPRINT13_CHANNELS.AUTO_CLEAR_EVENT, handler)
+        ipcRenderer.removeListener(SECURITY_CHANNELS.AUTO_CLEAR_EVENT, handler)
     }
   },
 
   screenProtect: {
     enable: (): Promise<ApiResponse<{ supported: boolean }>> =>
-      ipcRenderer.invoke(SPRINT13_CHANNELS.SCREEN_PROTECT_ENABLE),
+      ipcRenderer.invoke(SECURITY_CHANNELS.SCREEN_PROTECT_ENABLE),
 
     disable: (): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(SPRINT13_CHANNELS.SCREEN_PROTECT_DISABLE),
+      ipcRenderer.invoke(SECURITY_CHANNELS.SCREEN_PROTECT_DISABLE),
 
     status: (): Promise<
       ApiResponse<{
@@ -78,7 +78,7 @@ export const sprint13API = {
         protectedCount: number
         currentWindowProtected: boolean
       }>
-    > => ipcRenderer.invoke(SPRINT13_CHANNELS.SCREEN_PROTECT_STATUS)
+    > => ipcRenderer.invoke(SECURITY_CHANNELS.SCREEN_PROTECT_STATUS)
   },
 
   biometric: {
@@ -134,4 +134,4 @@ export const sprint13API = {
   }
 }
 
-export type Sprint13API = typeof sprint13API
+export type SecurityAPI = typeof securityAPI

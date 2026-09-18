@@ -3,8 +3,8 @@
  *
  * 整合方式：
  *   在 src/main/ipc/index.ts 的 registerAllHandlers() 中追加：
- *     import { registerSprint13IPC } from './sprint13-registry'
- *     registerSprint13IPC(mainWindow)
+ *     import { registerSecurityIPC } from './security-registry'
+ *     registerSecurityIPC(mainWindow)
  *
  * 范围：
  *   - TASK-068 剪贴板自动清空（schedule / cancel / status + event 广播）
@@ -20,7 +20,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import type { ApiResponse } from '../../types'
 import {
-  SPRINT13_CHANNELS,
+  SECURITY_CHANNELS,
   type AutoClearStatus
 } from '../../types/auto-clear'
 import {
@@ -66,16 +66,16 @@ export interface SchedulePayload {
 
 let registered = false
 
-export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
+export function registerSecurityIPC(mainWindow: BrowserWindow | null): void {
   if (registered) {
-    logger.warn('[IPC] Sprint13 registry already registered, skip')
+    logger.warn('[IPC] Security registry already registered, skip')
     return
   }
   registered = true
 
   // ============== TASK-068 auto-clear ==============
   ipcMain.handle(
-    SPRINT13_CHANNELS.AUTO_CLEAR_SCHEDULE,
+    SECURITY_CHANNELS.AUTO_CLEAR_SCHEDULE,
     wrapHandler(async (
       _ev,
       payload: SchedulePayload
@@ -96,7 +96,7 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   )
 
   ipcMain.handle(
-    SPRINT13_CHANNELS.AUTO_CLEAR_CANCEL,
+    SECURITY_CHANNELS.AUTO_CLEAR_CANCEL,
     wrapHandler(async (): Promise<ApiResponse<boolean>> => {
       try {
         clipboardAutoClear.cancel()
@@ -108,7 +108,7 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   )
 
   ipcMain.handle(
-    SPRINT13_CHANNELS.AUTO_CLEAR_STATUS,
+    SECURITY_CHANNELS.AUTO_CLEAR_STATUS,
     wrapHandler(async (): Promise<ApiResponse<AutoClearStatus>> => {
       try {
         return { success: true, data: clipboardAutoClear.getStatus() }
@@ -122,9 +122,9 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   const broadcast = (payload: unknown): void => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     try {
-      mainWindow.webContents.send(SPRINT13_CHANNELS.AUTO_CLEAR_EVENT, payload)
+      mainWindow.webContents.send(SECURITY_CHANNELS.AUTO_CLEAR_EVENT, payload)
     } catch (err) {
-      logger.warn('[Sprint13] broadcast failed:', (err as Error).message)
+      logger.warn('[Security] broadcast failed:', (err as Error).message)
     }
   }
   clipboardAutoClear.on('scheduled', (data) =>
@@ -138,7 +138,7 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
 
   // ============== TASK-069 screen-protection ==============
   ipcMain.handle(
-    SPRINT13_CHANNELS.SCREEN_PROTECT_ENABLE,
+    SECURITY_CHANNELS.SCREEN_PROTECT_ENABLE,
     wrapHandler(async (event): Promise<ApiResponse<{ supported: boolean }>> => {
       try {
         const supported = isScreenProtectionSupported()
@@ -153,7 +153,7 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   )
 
   ipcMain.handle(
-    SPRINT13_CHANNELS.SCREEN_PROTECT_DISABLE,
+    SECURITY_CHANNELS.SCREEN_PROTECT_DISABLE,
     wrapHandler(async (event): Promise<ApiResponse<boolean>> => {
       try {
         const win =
@@ -170,7 +170,7 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   )
 
   ipcMain.handle(
-    SPRINT13_CHANNELS.SCREEN_PROTECT_STATUS,
+    SECURITY_CHANNELS.SCREEN_PROTECT_STATUS,
     wrapHandler(async (
       event
     ): Promise<
@@ -406,20 +406,20 @@ export function registerSprint13IPC(mainWindow: BrowserWindow | null): void {
   )
 
   logger.info(
-    '[IPC] Sprint13 registry ready (auto-clear + screen-protection + biometric + audit + recovery)'
+    '[IPC] Security registry ready (auto-clear + screen-protection + biometric + audit + recovery)'
   )
 }
 
 /** 测试 / 热重载用：移除所有本 registry 注册的 handlers */
-export function _unregisterSprint13ForTests(): void {
+export function _unregisterSecurityForTests(): void {
   registered = false
   for (const ch of [
-    SPRINT13_CHANNELS.AUTO_CLEAR_SCHEDULE,
-    SPRINT13_CHANNELS.AUTO_CLEAR_CANCEL,
-    SPRINT13_CHANNELS.AUTO_CLEAR_STATUS,
-    SPRINT13_CHANNELS.SCREEN_PROTECT_ENABLE,
-    SPRINT13_CHANNELS.SCREEN_PROTECT_DISABLE,
-    SPRINT13_CHANNELS.SCREEN_PROTECT_STATUS,
+    SECURITY_CHANNELS.AUTO_CLEAR_SCHEDULE,
+    SECURITY_CHANNELS.AUTO_CLEAR_CANCEL,
+    SECURITY_CHANNELS.AUTO_CLEAR_STATUS,
+    SECURITY_CHANNELS.SCREEN_PROTECT_ENABLE,
+    SECURITY_CHANNELS.SCREEN_PROTECT_DISABLE,
+    SECURITY_CHANNELS.SCREEN_PROTECT_STATUS,
     BIOMETRIC_CHANNELS.AVAILABILITY,
     BIOMETRIC_CHANNELS.ENROLL,
     BIOMETRIC_CHANNELS.UNLOCK,

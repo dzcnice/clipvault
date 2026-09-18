@@ -11,13 +11,11 @@ const LABELS = ['极弱', '弱', '中等', '强', '极强']
 
 function mockApi(score: number, feedback: string[] = []): void {
   (window as unknown as { api: Record<string, unknown> }).api = {
-    sprint11: {
-      password: {
-        evaluateStrength: vi.fn(async () => ({
-          success: true,
-          data: { score, feedback }
-        }))
-      }
+    password: {
+      evaluateStrength: vi.fn(async () => ({
+        success: true,
+        data: { score, feedback }
+      }))
     }
   }
 }
@@ -77,7 +75,7 @@ describe('PasswordStrengthMeter', () => {
       data: { score: 2, feedback: [] }
     }))
     ;(window as unknown as { api: Record<string, unknown> }).api = {
-      sprint11: { password: { evaluateStrength: ev } }
+      password: { evaluateStrength: ev }
     }
     render(<PasswordStrengthMeter value="abc" />)
     vi.advanceTimersByTime(100)
@@ -106,7 +104,7 @@ describe('PasswordStrengthMeter', () => {
       data: { score: v.length > 5 ? 3 : 1, feedback: [] }
     }))
     ;(window as unknown as { api: Record<string, unknown> }).api = {
-      sprint11: { password: { evaluateStrength: ev } }
+      password: { evaluateStrength: ev }
     }
     const { rerender } = render(<PasswordStrengthMeter value="ab" />)
     vi.advanceTimersByTime(100)

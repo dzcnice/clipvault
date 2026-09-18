@@ -2,7 +2,7 @@
  * CredentialTOTPSection - 凭证详情里的 TOTP 挂载区
  *
  * 逻辑：
- *  - 查询 sprint11.totp.get(credentialId)
+ *  - 查询 totp.get(credentialId)
  *  - 若已配置：渲染 <TOTPRing />
  *  - 若未配置：渲染"添加 TOTP"按钮，点击后弹 PromptDialog 输入 otpauth:// URI 或 Base32 secret
  */
@@ -27,8 +27,8 @@ interface Sprint11TotpApi {
 }
 
 function getTotpApi(): Sprint11TotpApi | null {
-  const w = window as unknown as { api?: { sprint11?: { totp?: Sprint11TotpApi } } }
-  return w.api?.sprint11?.totp ?? null
+  const w = window as unknown as { api?: { totp?: Sprint11TotpApi } }
+  return w.api?.totp ?? null
 }
 
 export function CredentialTOTPSection({ credentialId }: Props): JSX.Element | null {
@@ -83,43 +83,30 @@ export function CredentialTOTPSection({ credentialId }: Props): JSX.Element | nu
   if (configured === null) return null
 
   return (
-    <div>
-      <label
-        className="block text-sm font-medium mb-2"
-        style={{ color: 'var(--text-secondary)' }}
-      >
-        两步验证（TOTP）
-      </label>
-      <div className="glass p-4" style={{ borderRadius: '12px' }}>
+    <section>
+      <div className="mb-2 text-xs font-medium text-muted-foreground">两步验证（TOTP）</div>
+      <div className="cv-panel p-4">
         {configured ? (
           <TOTPRing credentialId={credentialId} />
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <span
-              className="text-sm"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              尚未配置 TOTP
-            </span>
+            <span className="text-sm text-muted-foreground">尚未配置 TOTP</span>
             <button
               type="button"
+              className="cv-btn cv-btn-primary text-xs"
               onClick={() => void handleAdd()}
-              className="glass-btn glass-btn-primary glass-btn-sm"
             >
               添加 TOTP
             </button>
           </div>
         )}
-        {message && (
-          <div
-            className="mt-2 text-xs"
-            style={{ color: '#dc6464' }}
-          >
+        {message ? (
+          <div className="mt-2 text-xs" style={{ color: 'var(--destructive)' }}>
             {message}
           </div>
-        )}
+        ) : null}
       </div>
-    </div>
+    </section>
   )
 }
 

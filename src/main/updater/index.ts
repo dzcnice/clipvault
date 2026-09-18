@@ -18,13 +18,22 @@ import {
   type UpdaterStatus,
   type UpdateInfoPayload,
   type UpdateProgressPayload,
-  type UpdaterDiagnostics
+  type UpdaterDiagnostics,
+  type UpdaterStatePayload
 } from '../../types/updater'
 import { resolveChannel } from './channel'
 import { getPrefs } from '../prefs'
 
 const FIRST_CHECK_DELAY_MS = 30_000
 const DEFAULT_INTERVAL_MS = 4 * 60 * 60 * 1000
+
+function appIsPackaged(): boolean {
+  try {
+    return app.isPackaged === true
+  } catch {
+    return false
+  }
+}
 
 function humanizeUpdaterError(msg: string): string {
   const m = msg || '未知错误'
@@ -65,6 +74,15 @@ export class UpdaterService {
 
   start(mainWindow: BrowserWindow): void {
     this.mainWindow = mainWindow
+
+    // unpackaged：electron-updater 会 Skip checkForUpdates 且不发 not-available，
+    // 若先 setStatus('checking') 侧栏会永远停在「检查中…」
+    if (!appIsPackaged()) {
+      logger.info('[updater] unpackaged (dev): auto-update disabled')
+      this.setStatus('not-available')
+      return
+    }
+
     this.bindListeners()
 
     autoUpdater.autoDownload = false
@@ -133,6 +151,11 @@ export class UpdaterService {
       /* ignore */
     }
     this.stop()
+    if (!appIsPackaged()) {
+      this.setStatus('not-available')
+      logger.info('[updater] reconfigured skipped: unpackaged')
+      return
+    }
     if (this.autoCheckEnabled) {
       this.scheduleChecks()
     }
@@ -168,6 +191,11 @@ export class UpdaterService {
   }
 
   async checkForUpdates(): Promise<UpdateInfoPayload | null> {
+    if (!appIsPackaged()) {
+      logger.info('[updater] skip check: unpackaged (dev)')
+      this.setStatus('not-available')
+      return null
+    }
     this.reenableSource()
     try {
       this.setStatus('checking')
@@ -240,13 +268,14 @@ export class UpdaterService {
     }
   }
 
-  getState(): UpdaterEvent & { channel: UpdateChannel } {
+  getState(): UpdaterStatePayload {
     return {
       status: this.currentStatus,
       info: this.lastInfo,
       progress: this.lastProgress,
       error: this.lastError,
-      channel: this.currentChannel
+      channel: this.currentChannel,
+      packaged: appIsPackaged()
     }
   }
 
@@ -262,7 +291,8 @@ export class UpdaterService {
       autoCheckEnabled: this.autoCheckEnabled,
       intervalHours: Math.round(this.intervalMs / 3600_000),
       platform: process.platform,
-      feedUrlHint: 'https://github.com/dzcnice/clipvault/releases'
+      feedUrlHint: 'https://github.com/dzcnice/clipvault/releases',
+      packaged: appIsPackaged()
     }
   }
 

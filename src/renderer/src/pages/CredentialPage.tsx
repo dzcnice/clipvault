@@ -87,12 +87,12 @@ export default function CredentialPage(): JSX.Element {
     if (!selectedCredential) return
     const api = (
       window as unknown as {
-        api?: { sprint13?: { screenProtect?: { enable?: () => Promise<unknown>; disable?: () => Promise<unknown> } } }
+        api?: { security?: { screenProtect?: { enable?: () => Promise<unknown>; disable?: () => Promise<unknown> } } }
       }
     ).api
-    void api?.sprint13?.screenProtect?.enable?.()
+    void api?.security?.screenProtect?.enable?.()
     return () => {
-      void api?.sprint13?.screenProtect?.disable?.()
+      void api?.security?.screenProtect?.disable?.()
     }
   }, [selectedCredential])
 
@@ -288,7 +288,12 @@ export default function CredentialPage(): JSX.Element {
             <CredentialList
               credentials={credentials}
               selectedId={selectedCredential?.id}
-              onSelect={setSelectedCredential}
+              onSelect={(c) => {
+                void window.api.credential.get(c.id).then((res) => {
+                  if (res.success && res.data) setSelectedCredential(res.data)
+                  else setSelectedCredential(c)
+                })
+              }}
               onCopy={(c) => void handleCopy(c)}
               onDelete={(c) => void handleDelete(c)}
               onToggleFavorite={(c) => void handleToggleFavorite(c)}
@@ -303,8 +308,10 @@ export default function CredentialPage(): JSX.Element {
             credential={selectedCredential}
             onCopy={() => void handleCopy(selectedCredential)}
             onEdit={() => {
-              setEditingCredential(selectedCredential)
-              setIsFormOpen(true)
+              void window.api.credential.get(selectedCredential.id).then((res) => {
+                setEditingCredential(res.success && res.data ? res.data : selectedCredential)
+                setIsFormOpen(true)
+              })
             }}
             onDelete={() => void handleDelete(selectedCredential)}
             onToggleFavorite={() => void handleToggleFavorite(selectedCredential)}

@@ -110,7 +110,7 @@ export async function confirmSensitiveAction(
   if (!avail.enrolled) {
     return {
       ok: false,
-      error: '尚未注册生物识别。请先在设置中注册 Windows Hello / 触控 ID'
+      error: '尚未注册会话校验。请先在设置中启用生物识别 / 本机会话确认'
     }
   }
 

@@ -3,8 +3,8 @@
  *
  * 整合方式：
  *   在 src/main/ipc/index.ts 的 registerAllHandlers() 中追加：
- *     import { registerSprint11IPC } from './sprint11-registry'
- *     registerSprint11IPC(mainWindow)
+ *     import { registerToolsIPC } from './tools-registry'
+ *     registerToolsIPC(mainWindow)
  *
  * 范围：
  *   - TASK-057 TOTP upsert / delete / get / generate / parse-uri
@@ -16,7 +16,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import type { ApiResponse } from '../../types'
 import {
-  SPRINT11_CHANNELS,
+  TOOLS_CHANNELS,
   type OtpauthParseResult,
   type TOTPCode,
   type TOTPConfig,
@@ -46,18 +46,18 @@ import { logger } from '../utils/logger'
 
 let registered = false
 
-export function registerSprint11IPC(
+export function registerToolsIPC(
   _mainWindow: BrowserWindow | null
 ): void {
   if (registered) {
-    logger.warn('[IPC] Sprint11 registry already registered, skip')
+    logger.warn('[IPC] Tools registry already registered, skip')
     return
   }
   registered = true
 
   // ============== TOTP ==============
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_UPSERT,
+    TOOLS_CHANNELS.TOTP_UPSERT,
     wrapHandler(async (
       _ev,
       payload: TOTPUpsertInput
@@ -74,7 +74,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_DELETE,
+    TOOLS_CHANNELS.TOTP_DELETE,
     wrapHandler(async (
       _ev,
       payload: { credentialId: string }
@@ -88,7 +88,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_GET,
+    TOOLS_CHANNELS.TOTP_GET,
     wrapHandler(async (
       _ev,
       payload: { credentialId: string }
@@ -105,7 +105,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_LIST,
+    TOOLS_CHANNELS.TOTP_LIST,
     wrapHandler(async (): Promise<ApiResponse<Array<TOTPConfig & { credentialName: string }>>> => {
       try {
         return { success: true, data: listAllTOTP() }
@@ -116,7 +116,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_GENERATE,
+    TOOLS_CHANNELS.TOTP_GENERATE,
     wrapHandler(async (
       _ev,
       payload: { credentialId?: string; config?: TOTPConfig }
@@ -138,7 +138,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.TOTP_PARSE_URI,
+    TOOLS_CHANNELS.TOTP_PARSE_URI,
     wrapHandler(async (
       _ev,
       payload: { uri: string }
@@ -153,7 +153,7 @@ export function registerSprint11IPC(
 
   // ============== Password ==============
   ipcMain.handle(
-    SPRINT11_CHANNELS.PASSWORD_GENERATE_STRONG,
+    TOOLS_CHANNELS.PASSWORD_GENERATE_STRONG,
     wrapHandler(async (_ev, opts: StrongPasswordOpts): Promise<ApiResponse<string>> => {
       try {
         return { success: true, data: generateStrong(opts) }
@@ -164,7 +164,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.PASSWORD_GENERATE_PASSPHRASE,
+    TOOLS_CHANNELS.PASSWORD_GENERATE_PASSPHRASE,
     wrapHandler(async (_ev, opts: PassphraseOpts): Promise<ApiResponse<string>> => {
       try {
         return { success: true, data: generatePassphrase(opts) }
@@ -175,7 +175,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.PASSWORD_GENERATE_PIN,
+    TOOLS_CHANNELS.PASSWORD_GENERATE_PIN,
     wrapHandler(async (
       _ev,
       payload: { length: number }
@@ -189,7 +189,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.PASSWORD_EVALUATE_STRENGTH,
+    TOOLS_CHANNELS.PASSWORD_EVALUATE_STRENGTH,
     wrapHandler(async (
       _ev,
       payload: { value: string }
@@ -207,7 +207,7 @@ export function registerSprint11IPC(
 
   // ============== Health ==============
   ipcMain.handle(
-    SPRINT11_CHANNELS.HEALTH_REPORT,
+    TOOLS_CHANNELS.HEALTH_REPORT,
     wrapHandler(async (
       _ev,
       payload?: { force?: boolean }
@@ -232,7 +232,7 @@ export function registerSprint11IPC(
   )
 
   ipcMain.handle(
-    SPRINT11_CHANNELS.HEALTH_CHECK_HIBP,
+    TOOLS_CHANNELS.HEALTH_CHECK_HIBP,
     wrapHandler(async (
       _ev,
       payload: { password: string }
@@ -251,7 +251,7 @@ export function registerSprint11IPC(
 
   // ============== Preview ==============
   ipcMain.handle(
-    SPRINT11_CHANNELS.PREVIEW_FETCH_URL_META,
+    TOOLS_CHANNELS.PREVIEW_FETCH_URL_META,
     wrapHandler(async (
       _ev,
       payload: { url: string; timeoutMs?: number }
@@ -271,14 +271,14 @@ export function registerSprint11IPC(
   )
 
   logger.info(
-    '[IPC] Sprint11 registry ready (totp + password + health + preview)'
+    '[IPC] Tools registry ready (totp + password + health + preview)'
   )
 }
 
 /** 测试/热重载用 */
-export function _unregisterSprint11ForTests(): void {
+export function _unregisterToolsForTests(): void {
   registered = false
-  for (const ch of Object.values(SPRINT11_CHANNELS)) {
+  for (const ch of Object.values(TOOLS_CHANNELS)) {
     try {
       ipcMain.removeHandler(ch)
     } catch {

@@ -3,11 +3,12 @@
  * KR 1.2: 密钥 CRUD 功能
  */
 
-import { ipcMain, clipboard } from 'electron'
+import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../types'
 import * as credentialStore from '../../db/credential-store'
 import { wrapUnlockedHandler } from './utils'
 import { clipboardAutoClear } from '../clipboard/auto-clear'
+import { getClipboardMonitor } from '../clipboard/monitor'
 import { getPrefs } from '../prefs'
 import { logger } from '../utils/logger'
 import type {
@@ -180,14 +181,15 @@ export function registerCredentialHandlers(): void {
             if (!credential.value) {
               return { success: false, error: '凭证值为空' }
             }
-            clipboard.writeText(user)
+            const monitor = getClipboardMonitor()
+            monitor.writeText(user)
             if (opts?.thenPaste) {
               await new Promise((r) => setTimeout(r, 150))
               const { pasteToActiveApp } = await import('../clipboard/paste-active')
               await pasteToActiveApp()
             }
             await new Promise((r) => setTimeout(r, delayMs))
-            clipboard.writeText(credential.value)
+            monitor.writeText(credential.value)
             credentialStore.recordCredentialUsage(id)
             const ttl = getPrefs().autoClearTtlMs
             if (ttl > 0) clipboardAutoClear.schedule(credential.value, ttl)
@@ -227,7 +229,7 @@ export function registerCredentialHandlers(): void {
             return { success: false, error: '凭证值为空' }
           }
 
-          clipboard.writeText(text)
+          getClipboardMonitor().writeText(text)
           credentialStore.recordCredentialUsage(id)
           if (field === 'value' || field === 'totp') {
             const ttl = getPrefs().autoClearTtlMs

@@ -120,6 +120,27 @@ export async function saveImageDataUrl(dataUrl: string): Promise<string | null> 
   return outPath
 }
 
+/** 列表用缩略图（小 JPEG）；失败返回 null */
+export async function loadThumbnailAsDataUrl(
+  filePath: string,
+  maxEdge = 240
+): Promise<string | null> {
+  if (!filePath || !existsSync(filePath)) return null
+  try {
+    const sharp = loadSharp()
+    if (sharp) {
+      const buffer = await sharp(filePath)
+        .resize({ width: maxEdge, height: maxEdge, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 55 })
+        .toBuffer()
+      return `data:image/jpeg;base64,${buffer.toString('base64')}`
+    }
+    return loadImageAsDataUrl(filePath)
+  } catch {
+    return loadImageAsDataUrl(filePath)
+  }
+}
+
 /** 从磁盘读出图片并重建 Data URL；失败返回 null */
 export function loadImageAsDataUrl(filePath: string): string | null {
   if (!filePath || !existsSync(filePath)) return null

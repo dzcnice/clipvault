@@ -4,10 +4,10 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../types'
-import { sprint6API } from './sprint6-api'
-import { sprint11API } from './sprint11-api'
-import { sprint13API } from './sprint13-api'
-import { sprint14API } from './sprint14-api'
+import { hudAPI } from './hud-api'
+import { toolsAPI } from './tools-api'
+import { securityAPI } from './security-api'
+import { updaterAPI, importerAPI } from './updater-api'
 import type {
   Credential,
   CreateCredentialInput,
@@ -147,6 +147,9 @@ const api = {
     /** 仅复制图片本地路径文本（终端 / CLI） */
     copyPath: (id: string): Promise<ApiResponse<string>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_COPY_PATH, id),
+
+    getThumbnail: (id: string): Promise<ApiResponse<string | null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_GET_THUMBNAIL, id),
 
     createSnippet: (
       input: CreateSnippetInput & { workspace?: WorkspaceContext }
@@ -439,8 +442,6 @@ const api = {
 
   // ==================== 系统 ====================
   system: {
-    openFirewallSettings: (): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_OPEN_FIREWALL_SETTINGS),
     getVersion: (): Promise<ApiResponse<{ version: string; builtAt: string }>> =>
       ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_GET_VERSION)
   },
@@ -536,17 +537,14 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.PREFS_OPEN_IMAGES_DIR)
   },
 
-  // ==================== HUD + 命令面板 (Sprint 6) ====================
-  sprint6: sprint6API,
-
-  // ==================== 凭证增强：TOTP / 密码 / 健康 (Sprint 11) ====================
-  sprint11: sprint11API,
-
-  // ==================== 安全：自动清空 / 生物识别 / 审计 / 恢复 (Sprint 13) ====================
-  sprint13: sprint13API,
-
-  // ==================== 更新 + 导入 (Sprint 14，不含 webhook UI) ====================
-  sprint14: sprint14API
+  hud: hudAPI,
+  totp: toolsAPI.totp,
+  password: toolsAPI.password,
+  health: toolsAPI.health,
+  preview: toolsAPI.preview,
+  security: securityAPI,
+  updater: updaterAPI,
+  importer: importerAPI
 }
 
 // 暴露 API 到渲染进程

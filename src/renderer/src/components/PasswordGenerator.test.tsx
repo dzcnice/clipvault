@@ -20,7 +20,7 @@ function setupApi(): {
     evaluateStrength: vi.fn(async () => ({ success: true, data: { score: 3, feedback: [] } }))
   }
   ;(window as unknown as { api: Record<string, unknown> }).api = {
-    sprint11: { password: api }
+    password: api
   }
   return api
 }
@@ -87,7 +87,7 @@ describe('PasswordGenerator', () => {
   })
 
   it('生成失败（API 未挂载）时显示错误', async () => {
-    (window as unknown as { api: unknown }).api = { sprint11: {} }
+    (window as unknown as { api: unknown }).api = {}
     const user = userEvent.setup()
     render(<PasswordGenerator />)
     await act(async () => {

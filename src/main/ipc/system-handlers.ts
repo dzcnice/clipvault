@@ -1,5 +1,5 @@
 /**
- * 系统级 IPC：版本、防火墙、本地偏好、图片目录选择
+ * 系统级 IPC：版本、本地偏好、图片目录选择
  */
 
 import { ipcMain, shell, app, dialog, BrowserWindow } from 'electron'
@@ -27,28 +27,8 @@ export function registerSystemHandlers(): void {
         success: true,
         data: {
           version: app.getVersion(),
-          builtAt: new Date().toISOString()
+          builtAt: typeof __CV_BUILT_AT__ === 'string' ? __CV_BUILT_AT__ : 'dev'
         }
-      }
-    })
-  )
-
-  ipcMain.handle(
-    IPC_CHANNELS.SYSTEM_OPEN_FIREWALL_SETTINGS,
-    wrapHandler(async (): Promise<ApiResponse<boolean>> => {
-      if (process.platform !== 'win32') {
-        return { success: false, error: 'unsupported platform' }
-      }
-      try {
-        const err = await shell.openPath('control firewall.cpl')
-        if (err) {
-          logger.warn(`[system] openPath firewall returned error: ${err}`)
-          return { success: false, error: err }
-        }
-        return { success: true, data: true }
-      } catch (err) {
-        logger.warn(`[system] openFirewallSettings threw: ${(err as Error).message}`)
-        return { success: false, error: (err as Error).message }
       }
     })
   )

@@ -18,7 +18,7 @@ type StatusFn = () => Promise<{ success: boolean; data?: { enrolled: boolean } }
 
 function mountApi(opts: { setup: SetupFn; status: StatusFn }): void {
   (window as unknown as { api: unknown }).api = {
-    sprint13: {
+    security: {
       recovery: {
         status: opts.status,
         setup: opts.setup,

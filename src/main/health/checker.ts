@@ -62,7 +62,15 @@ export function scanAll(force = false): HealthScanResult {
   }
 
   try {
-    const { items } = listCredentials(undefined, undefined, undefined)
+    const { items } = listCredentials(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    )
     const issues: HealthIssue[] = []
     const summary: Record<HealthIssueType, number> = {
       weak_password: 0,

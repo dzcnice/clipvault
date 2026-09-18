@@ -17,7 +17,7 @@ interface CardState<T> {
 export interface DashboardData {
   todayClips: CardState<{ count: number; items: ClipboardItem[] }>
   recentCredentials: CardState<{ items: Credential[]; total: number }>
-  teamActivity: CardState<{ members: never[]; onlineCount: number }>
+  snippets: CardState<{ total: number }>
 }
 
 const initial = <T,>(): CardState<T> => ({ data: null, loading: true, error: null })
@@ -34,7 +34,7 @@ export function useDashboardData(
   const [todayClips, setTodayClips] = useState<DashboardData['todayClips']>(initial())
   const [recentCredentials, setRecentCredentials] =
     useState<DashboardData['recentCredentials']>(initial())
-  const [teamActivity, setTeamActivity] = useState<DashboardData['teamActivity']>(initial())
+  const [snippets, setSnippets] = useState<DashboardData['snippets']>(initial())
   const mounted = useRef(true)
 
   // v2.1 · 以 ref 承载 workspace，避免各 load 回调的依赖抖动
@@ -46,18 +46,14 @@ export function useDashboardData(
   const loadTodayClips = useCallback(async (): Promise<void> => {
     try {
       const res = await window.api.clipboard.getHistory({
-        limit: 500,
+        filter: { startTime: Date.now() - ONE_DAY },
+        limit: 8,
         workspace: workspaceRef.current
       })
       if (!mounted.current) return
       if (res.success && res.data) {
-        const now = Date.now()
-        const items = res.data.items.filter((it) => {
-          const ts = it.createdAt
-          return typeof ts === 'number' && now - ts <= ONE_DAY
-        })
         setTodayClips({
-          data: { count: items.length, items: items.slice(0, 5) },
+          data: { count: res.data.total, items: res.data.items.slice(0, 5) },
           loading: false,
           error: null
         })
@@ -94,19 +90,30 @@ export function useDashboardData(
     }
   }, [])
 
-  const loadTeamActivity = useCallback(async (): Promise<void> => {
-    // v3.0 个人本地版：不再拉取团队成员
-    if (!mounted.current) return
-    setTeamActivity({
-      data: { members: [], onlineCount: 0 },
-      loading: false,
-      error: null
-    })
+  const loadSnippets = useCallback(async (): Promise<void> => {
+    try {
+      const res = await window.api.clipboard.getSnippets({
+        workspace: workspaceRef.current
+      })
+      if (!mounted.current) return
+      if (res.success && res.data) {
+        setSnippets({
+          data: { total: res.data.length },
+          loading: false,
+          error: null
+        })
+      } else {
+        setSnippets({ data: null, loading: false, error: res.error ?? '加载失败' })
+      }
+    } catch (err) {
+      if (!mounted.current) return
+      setSnippets({ data: null, loading: false, error: String(err) })
+    }
   }, [])
 
   const refreshAll = useCallback(async (): Promise<void> => {
-    await Promise.all([loadTodayClips(), loadRecentCredentials(), loadTeamActivity()])
-  }, [loadTodayClips, loadRecentCredentials, loadTeamActivity])
+    await Promise.all([loadTodayClips(), loadRecentCredentials(), loadSnippets()])
+  }, [loadTodayClips, loadRecentCredentials, loadSnippets])
 
   // ρ3：用 ref 保存最新 refreshAll，interval 只在 pollMs 变化时重建，
   // 避免各 load 回调的引用抖动导致 30s 轮询被频繁清掉重置。
@@ -134,7 +141,7 @@ export function useDashboardData(
   }, [workspace])
 
   return {
-    data: { todayClips, recentCredentials, teamActivity },
+    data: { todayClips, recentCredentials, snippets },
     refreshAll
   }
 }

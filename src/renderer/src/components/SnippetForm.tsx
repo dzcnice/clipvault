@@ -3,14 +3,8 @@
  */
 
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import type { ClipboardItem, CreateSnippetInput, UpdateSnippetInput } from '@/types'
-
-/** 关闭图标 */
-const CloseIcon = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-)
 
 const VARS = [
   { token: '{date}', tip: '今天日期 YYYY-MM-DD' },
@@ -90,74 +84,58 @@ export default function SnippetForm({
   }
 
   return (
-    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 animate-fadeIn">
-      <div
-        className="glass w-full max-w-lg mx-4 animate-scaleIn"
-        style={{ borderRadius: '20px' }}
-      >
-        {/* 表单头部 */}
-        <div className="px-6 py-4 flex items-center justify-between">
-          <h3
-            className="text-lg font-semibold"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {snippet ? '编辑片段' : '新建快速片段'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(43,36,56,0.35)] p-4 animate-fadeIn">
+      <div className="cv-panel w-full max-w-lg">
+        <div className="flex items-center justify-between border-b-2 border-[var(--line)] px-5 py-3">
+          <h3 className="font-pixel text-sm font-bold">
+            {snippet ? '编辑片段' : '新建片段'}
           </h3>
-          <button
-            onClick={onCancel}
-            className="glass-btn glass-btn-icon"
-          >
-            <CloseIcon />
+          <button type="button" className="cv-btn cv-btn-ghost p-2" onClick={onCancel}>
+            <X size={16} />
           </button>
         </div>
 
-        <div className="divider mx-6" />
-
         {/* 表单内容 */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* 名称 */}
+        <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              片段名称 <span style={{ color: '#dc6464' }}>*</span>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              名称 *
             </label>
             <input
               type="text"
-              className={`glass-input ${errors.name ? 'glass-input-error' : ''}`}
-              placeholder="例如：常用邮箱签名"
+              className="w-full border-2 border-[var(--line)] bg-[var(--input)] px-3 py-2 text-sm"
+              placeholder="例如：邮箱签名"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-            {errors.name && (
-              <p className="text-sm mt-1" style={{ color: '#dc6464' }}>{errors.name}</p>
-            )}
+            {errors.name ? (
+              <p className="mt-1 text-xs" style={{ color: 'var(--destructive)' }}>
+                {errors.name}
+              </p>
+            ) : null}
           </div>
 
-          {/* 内容 */}
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              片段内容 <span style={{ color: '#dc6464' }}>*</span>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              内容 *
             </label>
             <textarea
-              className={`glass-input min-h-[150px] font-mono text-sm ${errors.content ? 'glass-input-error' : ''}`}
-              placeholder="输入您要保存的文本内容..."
+              className="min-h-[140px] w-full border-2 border-[var(--line)] bg-[var(--input)] px-3 py-2 font-mono text-sm"
+              placeholder="要保存的文本…"
               value={content}
               onChange={(e) => setContent(e.target.value)}
             />
-            {errors.content && (
-              <p className="text-sm mt-1" style={{ color: '#dc6464' }}>{errors.content}</p>
-            )}
+            {errors.content ? (
+              <p className="mt-1 text-xs" style={{ color: 'var(--destructive)' }}>
+                {errors.content}
+              </p>
+            ) : null}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {VARS.map((v) => (
                 <button
                   key={v.token}
                   type="button"
-                  className="rounded border px-2 py-0.5 font-mono text-[11px]"
+                  className="cv-btn cv-btn-ghost font-mono text-[11px] !px-2 !py-0.5"
                   title={v.tip}
                   onClick={() => insertVar(v.token)}
                 >
@@ -165,66 +143,46 @@ export default function SnippetForm({
                 </button>
               ))}
             </div>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              {content.length} 个字符 · 点击变量插入；复制时自动展开
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {content.length} 字 · 点击变量插入，复制时自动展开
             </p>
           </div>
 
-          {/* 快捷键 */}
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              快捷标识（可选）
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              全局热键（可选）
             </label>
             <input
               type="text"
-              className="glass-input"
-              placeholder="例如：sig1, email, addr"
+              className="w-full border-2 border-[var(--line)] bg-[var(--input)] px-3 py-2 text-sm"
+              placeholder="CommandOrControl+Alt+1"
               value={shortcut}
               onChange={(e) => setShortcut(e.target.value)}
             />
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              全局热键请填 Electron 格式，如{' '}
-              <code className="font-mono">CommandOrControl+Alt+1</code>
-              ；普通别名（如 sig1）仅用于搜索，不会注册全局键。
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Electron accelerator 才会注册全局键；普通别名只用于搜索。
             </p>
           </div>
 
-          {/* 标签 */}
           <div>
-            <label
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              标签（可选）
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              标签（逗号分隔）
             </label>
             <input
               type="text"
-              className="glass-input"
-              placeholder="多个标签用逗号分隔"
+              className="w-full border-2 border-[var(--line)] bg-[var(--input)] px-3 py-2 text-sm"
+              placeholder="工作, 签名"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
             />
           </div>
 
-          {/* 按钮 */}
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="glass-btn"
-              disabled={submitting}
-            >
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="cv-btn cv-btn-secondary" onClick={onCancel} disabled={submitting}>
               取消
             </button>
-            <button
-              type="submit"
-              className="glass-btn glass-btn-primary"
-              disabled={submitting}
-            >
-              {submitting ? '创建中...' : '创建片段'}
+            <button type="submit" className="cv-btn cv-btn-primary" disabled={submitting}>
+              {submitting ? '保存中…' : snippet ? '保存' : '创建'}
             </button>
           </div>
         </form>

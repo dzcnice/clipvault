@@ -139,15 +139,14 @@ function KeyInterceptBridge(): JSX.Element | null {
           ? { provider: prompt.detectedKeyType }
           : undefined
       })
-      decide('saveLocalOnly')
       if (res.success) {
+        decide('saveLocalOnly')
         showPixelToast(`已收入钥匙箱 · ${trimmed}`)
       } else {
         showPixelToast(res.error || '保存失败')
       }
     } catch (err) {
       logger.error('[KeyIntercept] create failed:', err)
-      decide('saveLocalOnly')
       showPixelToast('保存失败')
     }
   }

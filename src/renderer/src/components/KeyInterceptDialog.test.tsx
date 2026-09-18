@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
-import { KeyInterceptDialog } from './KeyInterceptDialog'
+import { KeyInterceptDialog, suggestCredentialName } from './KeyInterceptDialog'
 
 const noop = (): void => undefined
 
@@ -76,5 +76,32 @@ describe('KeyInterceptDialog formKey', () => {
     )
     expect(queryByDisplayValue('edited')).toBeFalsy()
     expect(queryByDisplayValue(/^Token · /)).toBeTruthy()
+  })
+
+  it('默认名不含密钥片段（sk- / 头尾切片）', () => {
+    const name = suggestCredentialName('OPENAI_API_KEY', 'sk-0abcDEF123a5d')
+    expect(name).toMatch(/^OpenAI · \d{4}-\d{2}-\d{2}$/)
+    expect(name).not.toMatch(/sk-/i)
+    expect(name).not.toContain('a5d')
+    expect(name).not.toContain('0abc')
+
+    const aws = suggestCredentialName('AWS_ACCESS_KEY', 'AAAA-first-secret')
+    expect(aws).toMatch(/^AWS · \d{4}-\d{2}-\d{2}$/)
+    expect(aws).not.toContain('AAAA')
+
+    const { queryByDisplayValue } = render(
+      <KeyInterceptDialog
+        open
+        onOpenChange={noop}
+        content="sk-proj-abcdefghijk"
+        detectedType="OPENAI"
+        onShareAsCredential={noop}
+        onSaveLocalOnly={noop}
+        onCancel={noop}
+      />
+    )
+    const input = queryByDisplayValue(/^OpenAI · \d{4}-\d{2}-\d{2}$/) as HTMLInputElement | null
+    expect(input).toBeTruthy()
+    expect(input!.value).not.toMatch(/sk-/i)
   })
 })

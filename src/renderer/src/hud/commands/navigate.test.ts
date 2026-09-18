@@ -21,10 +21,10 @@ describe('hud/commands/navigate', () => {
     expect(cmds.find((c) => c.id === 'nav.health')).toBeDefined()
   })
 
-  it('nav.dashboard 调用 api.sprint6.hud.navigate("/dashboard")', async () => {
+  it('nav.dashboard 调用 api.hud.navigate("/dashboard")', async () => {
     const navigate = vi.fn().mockResolvedValue({ success: true })
     ;(globalThis as unknown as { window: unknown }).window = {
-      api: { sprint6: { hud: { navigate, hide: vi.fn() } } }
+      api: { hud: { navigate, hide: vi.fn() } }
     }
     const cmd = buildNavigateCommands().find((c) => c.id === 'nav.dashboard')
     expect(cmd).toBeDefined()
@@ -41,9 +41,7 @@ describe('hud/commands/navigate', () => {
     ;(globalThis as unknown as { document: unknown }).document = { documentElement: el }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
-        sprint6: {
-          hud: { hide: vi.fn().mockResolvedValue({ success: true }), navigate: vi.fn() }
-        }
+        hud: { hide: vi.fn().mockResolvedValue({ success: true }), navigate: vi.fn() }
       },
       localStorage: { setItem: vi.fn() }
     }
@@ -58,7 +56,7 @@ describe('hud/commands/navigate', () => {
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
         vault: { ensureOpen },
-        sprint6: { hud: { hide, navigate: vi.fn() } }
+        hud: { hide, navigate: vi.fn() }
       }
     }
     const cmd = buildNavigateCommands().find((c) => c.id === 'action.ensure-open')

@@ -34,8 +34,8 @@ interface KeyInterceptDialogProps {
 }
 
 /** 内部表单：用 props 作为 state lazy init，open key 切换时整体重新挂载 */
-/** 根据类型与内容片段生成更好记的默认名 */
-function suggestCredentialName(detectedType?: string, content?: string): string {
+/** 根据类型生成默认名：标签 · YYYY-MM-DD。禁止把密钥片段写进名称。 */
+export function suggestCredentialName(detectedType?: string, content?: string): string {
   const d = new Date()
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const t = (detectedType ?? '').toLowerCase()
@@ -51,7 +51,7 @@ function suggestCredentialName(detectedType?: string, content?: string): string 
   else if (t.includes('google') || t.includes('gcp')) label = 'Google'
   else if (detectedType) label = detectedType
 
-  // 内容前缀辅助（无类型时）
+  // 仅用前缀判断类型，不把 content 切片拼进名称
   if (label === '密钥' && content) {
     const c = content.trim()
     if (c.startsWith('sk-')) label = 'OpenAI'
@@ -60,15 +60,7 @@ function suggestCredentialName(detectedType?: string, content?: string): string 
     else if (c.includes('BEGIN') && c.includes('PRIVATE KEY')) label = 'SSH'
   }
 
-  // 内容片段作后缀，避免同天多条重名
-  let hint = ''
-  if (content) {
-    const c = content.trim().replace(/\s+/g, '')
-    if (c.length >= 8) {
-      hint = ` · ${c.slice(0, 4)}…${c.slice(-3)}`
-    }
-  }
-  return `${label} · ${stamp}${hint}`
+  return `${label} · ${stamp}`
 }
 
 function InterceptForm(props: {

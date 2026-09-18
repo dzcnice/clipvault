@@ -174,7 +174,15 @@ describeOrSkip('集成 · 跨模块 · 大数据量 + 事务回滚', () => {
         value: `v-${i}`
       })
     }
-    const { total, items } = credStore.listCredentials(undefined, undefined, undefined, 20, 0)
+    const { total, items } = credStore.listCredentials(
+      undefined,
+      undefined,
+      undefined,
+      20,
+      0,
+      undefined,
+      true
+    )
     expect(total).toBe(1000)
     expect(items.length).toBe(20)
     // 抽查最后一页

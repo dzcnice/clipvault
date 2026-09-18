@@ -1,122 +1,122 @@
 /**
- * HealthReportPage (Sprint 11 · TASK-059)
+ * 凭证健康检查 · 像素壳
  */
 
-import React from 'react'
+import { Activity, Loader2, RefreshCw } from 'lucide-react'
 import { HealthReportCard } from '../components/HealthReportCard'
 import { useHealthReport } from '../hooks/useHealthReport'
 
-const severityLabel = (s: 'low' | 'medium' | 'high'): string =>
-  s === 'high' ? '高' : s === 'medium' ? '中' : '低'
+const typeLabel: Record<string, string> = {
+  weak_password: '弱密码',
+  reused_password: '重复使用',
+  stale_unused: '长期未用',
+  pwned: '疑似泄露'
+}
 
-const severityColor = (s: 'low' | 'medium' | 'high'): string =>
-  s === 'high' ? '#ef4444' : s === 'medium' ? '#eab308' : '#6b7280'
+function severityClass(s: 'low' | 'medium' | 'high'): string {
+  if (s === 'high') return 'text-[var(--destructive)]'
+  if (s === 'medium') return 'text-[var(--primary)]'
+  return 'text-muted-foreground'
+}
 
-export const HealthReportPage: React.FC = () => {
+function severityLabel(s: 'low' | 'medium' | 'high'): string {
+  return s === 'high' ? '高' : s === 'medium' ? '中' : '低'
+}
+
+export default function HealthReportPage(): JSX.Element {
   const { state, report, error, refresh } = useHealthReport(true)
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h2>凭证健康检查</h2>
-      <HealthReportCard />
-
-      {state === 'ready' && report && (
-        <div
-          style={{
-            border: '1px solid rgba(0,0,0,0.1)',
-            borderRadius: 8,
-            overflow: 'hidden'
-          }}
-        >
-          <div
-            style={{
-              padding: 12,
-              background: 'rgba(0,0,0,0.03)',
-              display: 'flex',
-              justifyContent: 'space-between'
-            }}
-          >
-            <strong>全部问题（{report.issues.length}）</strong>
-            <button
-              type="button"
-              onClick={() => void refresh(true)}
-              style={{ cursor: 'pointer' }}
-            >
-              强制刷新
-            </button>
+    <div className="cv-page">
+      <div className="cv-page-inner max-w-4xl">
+        <header className="mb-6 flex items-end justify-between gap-3">
+          <div>
+            <p className="cv-kicker mb-1">安全</p>
+            <h1 className="cv-page-title">凭证健康</h1>
+            <p className="cv-page-desc">弱密码、重复、陈旧与泄露检查，分数越高质量越好</p>
           </div>
-          {report.issues.length === 0 ? (
-            <div style={{ padding: 16, color: '#10b981' }}>
-              乖乖，所有凭证都很健康喵～
-            </div>
-          ) : (
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 13
-              }}
-            >
-              <thead>
-                <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
-                  <th style={{ textAlign: 'left', padding: 8 }}>凭证</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>类型</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>严重度</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.issues.map((i, idx) => (
-                  <tr
-                    key={idx}
-                    style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}
-                  >
-                    <td style={{ padding: 8 }}>
-                      <button
-                        type="button"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--primary, #b8860b)',
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          padding: 0,
-                          font: 'inherit'
-                        }}
-                        title="去凭证页处理"
-                        onClick={() => {
-                          window.location.hash = `#/credentials?highlight=${encodeURIComponent(
-                            i.credentialId ?? i.credentialName
-                          )}`
-                        }}
-                      >
-                        {i.credentialName}
-                      </button>
-                    </td>
-                    <td style={{ padding: 8 }}>{i.type}</td>
-                    <td
-                      style={{
-                        padding: 8,
-                        color: severityColor(i.severity),
-                        fontWeight: 600
-                      }}
-                    >
-                      {severityLabel(i.severity)}
-                    </td>
-                    <td style={{ padding: 8 }}>{i.message}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+          <button
+            type="button"
+            className="cv-btn cv-btn-secondary text-xs"
+            onClick={() => void refresh(true)}
+          >
+            <RefreshCw size={14} strokeWidth={2.25} />
+            强制刷新
+          </button>
+        </header>
 
-      {state === 'error' && (
-        <div style={{ color: '#ef4444' }}>错误：{error}</div>
-      )}
+        <HealthReportCard className="mb-5" />
+
+        {state === 'loading' || state === 'idle' ? (
+          <div className="cv-empty">
+            <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--primary)' }} />
+            <span className="font-body text-sm">正在扫描…</span>
+          </div>
+        ) : null}
+
+        {state === 'error' ? (
+          <div className="cv-panel p-5 text-sm" style={{ color: 'var(--destructive)' }}>
+            {error || '健康报告暂不可用'}
+          </div>
+        ) : null}
+
+        {state === 'ready' && report ? (
+          <section className="cv-panel overflow-hidden">
+            <div className="flex items-center justify-between border-b-2 border-[var(--line)] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Activity size={16} style={{ color: 'var(--primary)' }} />
+                <h2 className="font-pixel text-sm font-bold">全部问题</h2>
+                <span className="cv-badge font-mono-num">{report.issues.length}</span>
+              </div>
+            </div>
+            {report.issues.length === 0 ? (
+              <div className="cv-empty py-10">
+                <p className="font-pixel font-bold">箱子很干净</p>
+                <p className="font-body text-sm text-muted-foreground">当前没有弱密码、重复或泄露项</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="font-pixel text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <th className="px-4 py-2">凭证</th>
+                      <th className="px-4 py-2">类型</th>
+                      <th className="px-4 py-2">严重度</th>
+                      <th className="px-4 py-2">说明</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.issues.map((issue, idx) => (
+                      <tr key={`${issue.credentialId ?? issue.credentialName}-${idx}`} className="border-t border-[var(--line-soft)]">
+                        <td className="px-4 py-2.5">
+                          <button
+                            type="button"
+                            className="font-medium text-[var(--primary)] underline-offset-2 hover:underline"
+                            onClick={() => {
+                              window.location.hash = `#/credentials?highlight=${encodeURIComponent(
+                                issue.credentialId ?? issue.credentialName
+                              )}`
+                            }}
+                          >
+                            {issue.credentialName}
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {typeLabel[issue.type] ?? issue.type}
+                        </td>
+                        <td className={`px-4 py-2.5 font-semibold ${severityClass(issue.severity)}`}>
+                          {severityLabel(issue.severity)}
+                        </td>
+                        <td className="px-4 py-2.5">{issue.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : null}
+      </div>
     </div>
   )
 }
-
-export default HealthReportPage

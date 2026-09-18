@@ -18,8 +18,7 @@ interface DeferredCall {
 function setupApi(): { calls: DeferredCall[] } {
   const calls: DeferredCall[] = []
   ;(window as unknown as { api: Record<string, unknown> }).api = {
-    sprint11: {
-      totp: {
+    totp: {
         generate: vi.fn((payload: { credentialId?: string }) => {
           return new Promise((resolve, reject) => {
             calls.push({
@@ -33,7 +32,6 @@ function setupApi(): { calls: DeferredCall[] } {
             })
           })
         })
-      }
     }
   }
   return { calls }

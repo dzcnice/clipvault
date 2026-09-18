@@ -32,10 +32,8 @@ export function StepShortcut({
     try {
       const api = window.api as {
         hud?: { toggle?: () => Promise<unknown> }
-        sprint6?: { hud?: { toggle?: () => Promise<unknown> } }
       }
-      // 主窗口 preload 可能挂在 api.hud 或 sprint6.hud
-      const hud = api.hud ?? api.sprint6?.hud
+      const hud = api.hud
       if (hud?.toggle) {
         void hud.toggle()
       }
