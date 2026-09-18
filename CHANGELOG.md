@@ -2,6 +2,40 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，并采用 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.3.0] - 2026-09-18
+
+### Added
+- 字体改为本地 `@fontsource`（Pixelify / Plus Jakarta / IBM Plex Mono），CSP 不再依赖 Google Fonts
+- 编译期 `__CV_BUILT_AT__`，设置页显示真实构建时间
+- 概览 KPI 显示片段数量（不再写死 0）
+- 剪贴板缩略图 IPC；列表默认 80 条 + 加载更多
+
+### Changed
+- IPC 去掉 sprint 前缀：`hud` / `totp` / `password` / `health` / `preview` / `security` / `updater` / `importer`
+- Workspace 收窄为个人本地；HUD / 概览去掉团队入口
+- 概览、健康、片段、凭证详情、TOTP 统一像素壳（`cv-panel` / `cv-btn`）
+- 健康全 0 时紧凑空态「箱子很干净」
+- 开发态侧栏更新按钮显示「开发版」，不再卡在「检查中…」
+- 凭证列表默认不解密 secret；健康/导出显式要明文
+- 今日剪贴板按 `startTime` 过滤，不再拉 500 条再筛
+- 安全扫描映射 v3 T1–T8；安装包去掉 Bonjour/摄像头/麦克风声明
+
+### Fixed
+- 密钥拦截默认名不再拼接 `sk-` 等密钥片段
+- 片段复制走 `monitor.writeText`（展开变量，不回写入历史）
+- 凭证/用户名复制失败不再回退 `navigator.clipboard` 绕过门禁
+- `WINDOW_*` / 开机自启 IPC 走 `wrapHandler`
+- 打包后片段全局热键动态 import，避免 `require` 找不到 chunk
+- 图片指纹用尺寸 + bitmap 头尾，不再对整张 toDataURL
+- 排除应用 fingerprint 含 sourceApp，避免跳过后无法入库
+- 截图入库后若 generation 已变则不写回覆盖
+- 文件复制以 `type=file` 入库
+
+### Notes
+- 仍为 v3 个人本地版；Windows 代码签名仍依赖外部证书
+- 覆盖安装保留 `%APPDATA%\clipvault`
+- 已入库的旧默认名（含密钥片段）不会自动改名
+
 ## [3.2.2] - 2026-07-22
 
 ### Fixed
