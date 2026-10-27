@@ -1,10 +1,22 @@
-appId: com.clipvault.app
-productName: ClipVault
+appId: com.clipvault.workbench.preview
+productName: ClipVault Workbench Preview
 directories:
   buildResources: build
 icon: resources/icon-square-v3.png
 # 体积：Electron 运行时占大头；下列规则尽量去掉无用语言包与开发残留
 files:
+  - 'out/main/**/*'
+  - 'out/preload/**/*'
+  - 'out/renderer/**/*'
+  - 'resources/**/*'
+  - 'package.json'
+  - '!dist{,/**}'
+  - '!scripts{,/**}'
+  - '!out/acceptance{,/**}'
+  - '!out/**/*.log'
+  - '!out/dependency-audit*.json'
+  - '!integrations{,/**}'
+  - '!resources/harness-runtime{,/**}'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.*'
@@ -26,24 +38,29 @@ asarUnpack:
   - node_modules/better-sqlite3/**/*.node
   - node_modules/sharp/**/*
   - node_modules/@img/**/*
+extraResources:
+  - from: resources/harness-runtime
+    to: harness-runtime
+    filter:
+      - '**/*'
 # 仅保留中英文 Chromium 语言包（完整 locales 约 40MB+）
 electronLanguages:
   - en-US
   - zh-CN
 # v3.0 个人本地版：不再打包 Tailscale / node-datachannel / transformers
 win:
-  executableName: ClipVault
+  executableName: ClipVault Workbench Preview
   icon: resources/icon-v3.ico
   target:
     - nsis
   signAndEditExecutable: false
   # TASK-084 代码签名占位（详见 docs/release/signing-setup.md）
   # 实际签名由 scripts/sign.js 在 release pipeline 中调用，支持本地 pfx 与 Azure Key Vault HSM
-  publisherName: "ClipVault"
   # TASK-084 代码签名占位（详见 docs/release/signing-setup.md）
-  # 注：electron-builder v24 扁平结构；v25+ 的 signtoolOptions 嵌套语法需升级后启用
-  signingHashAlgorithms:
-    - sha256
+  signtoolOptions:
+    publisherName: "ClipVault"
+    signingHashAlgorithms:
+      - sha256
   # 证书材料通过环境变量注入：
   #   CSC_LINK / CSC_KEY_PASSWORD        （本地 pfx 模式）
   #   AZURE_KEY_VAULT_URI / AZURE_CERT_NAME / AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_CLIENT_SECRET （HSM 模式）

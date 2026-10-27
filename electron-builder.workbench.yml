@@ -1,0 +1,13 @@
+# Independent local workbench: never inherit the installed ClipVault identity.
+extends: ./electron-builder.yml
+appId: com.clipvault.workbench.preview
+productName: ClipVault Workbench Preview
+extraMetadata:
+  name: clipvault-workbench-preview
+  productName: ClipVault Workbench Preview
+directories:
+  output: dist/workbench-daily-20261026
+win:
+  executableName: ClipVault Workbench Preview
+nsis:
+  artifactName: clipvault-workbench-preview-${version}-setup.${ext}

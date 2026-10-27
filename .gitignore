@@ -3,6 +3,7 @@ node_modules/
 
 # Build outputs
 out/
+resources/harness-runtime/
 dist/
 dist-types/
 dist-types-web/

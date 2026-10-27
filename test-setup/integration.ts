@@ -45,11 +45,11 @@ export function isSqliteAvailable(): boolean {
     // 不静默：便于区分「ABI 不匹配」与「未安装」
     const msg = err instanceof Error ? err.message : String(err)
     if (process.env.VITEST || process.env.NODE_ENV === 'test') {
-      console.warn(
+      process.stderr.write(
         `[integration] better-sqlite3 unavailable under current Node ABI — integration suites will skip.\n` +
           `  reason: ${msg}\n` +
           `  fix: npm run rebuild:sqlite   # Node ABI for vitest\n` +
-          `  then: npm run postinstall     # restore Electron ABI for dev/build`
+          `  then: npm run postinstall     # restore Electron ABI for dev/build\n`
       )
     }
     return false

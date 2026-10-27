@@ -6,6 +6,7 @@ import { resolve } from 'path'
 // - renderer 测试文件通过顶部 `// @vitest-environment jsdom` 指令切换到 jsdom
 // - node 环境为默认（主进程 .test.ts）
 export default defineConfig({
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
