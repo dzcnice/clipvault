@@ -1,0 +1,35 @@
+interface Login { password: string }
+const token = await getToken()
+headers.authorization = `Bearer ${t}`
+api_key: process.env.API_KEY
+password: z.string().min(8)
+if (!token) return null
+url += `?token=${token}`
+password = getpass.getpass()
+password: ${DB_PASSWORD}
+API_KEY=your-api-key-here
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+请把密码：放在资源库里
+"password": { "type": "string" }
+password_hash TEXT NOT NULL
+const secretName = getName()
+token: Token | null
+def login(username: str, password: str) -> bool:
+export const TOKEN_KEY = "auth"
+Authorization: Bearer <YOUR_TOKEN>
+const pwd = form.get("pwd")
+apiKey: string;
+DB_PASSWORD=${DB_PASSWORD}
+password="changeme"
+token = "test-token"
+const jwtSecretEnv = "JWT_SECRET"
+retryCount = 0; while (retryCount < MAX) {
+curl -H "Authorization: Bearer $TOKEN" https://api.example.com
+git clone https://github.com/a/b.git
+ssh-keygen -t ed25519
+eyJhbGciOiJIUzI1NiJ9 is the header
+const PASSWORD_MIN = 8
+tokens.forEach(token => count(token))
+postgres://${DB_USER}:${DB_PASS}@localhost/app
+sk-learn is a library
+password: process.env.DB_PASSWORD ?? ""

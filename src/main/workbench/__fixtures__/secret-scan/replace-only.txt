@@ -1,0 +1,4 @@
+DB_PASSWORD=Pa55w0rd!2026
+const apiKey = "a8f5f167f44f4964e6c998dee827110c"
+password: 'Tr0ub4dor&3'
+export CLIENT_SECRET=9fJ2kLm4Qx

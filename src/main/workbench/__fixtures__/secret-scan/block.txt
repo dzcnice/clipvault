@@ -1,0 +1,9 @@
+my pass is Hunter2-Staging! ok
+pin=q9Zt8mPw;
+sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z
+ghp_aB3aB3aB3aB3aB3aB3aB3aB3aB3aB3aB3aB3
+AKIAIOSFODNN7EXAMPLF
+-----BEGIN OPENSSH PRIVATE KEY-----
+eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U
+postgres://admin:S3cr3t!pw@db.example.com/app
+{"pw":"Hunter2-Staging!"}
