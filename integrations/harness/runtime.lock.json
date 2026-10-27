@@ -1,0 +1,22 @@
+{
+  "historical": true,
+  "supersededBy": "official.lock.json",
+  "purpose": "M0 local validation baseline; not a distributable runtime bundle",
+  "version": "0.1.3-alpha.1",
+  "sourceRevision": "3068df40a17a968d9630a6fcb1fe0ab6074d9810",
+  "validationProfileSha256": "d6e6f2cdeb19b3c835d257b653d3255f5d949772eec3763026af2fdfa847eb92",
+  "hashScope": "SDK and runtime entrypoints, critical boot/protocol/provider artifacts and dependency lock; full dependency closure is a release gate",
+  "artifacts": {
+    "pnpm-lock.yaml": "b96a9a03a58cbe70cb12597874ac0e5d236b2cfcf0671229b2d6a9939125c969",
+    "apps/cli/package.json": "58cd7f3b0fe19bc77d01329682af04a6f17c397c02132d79240e4224e1644365",
+    "apps/cli/lib/bin.js": "50aab35c14fc0e7fceaa39b9a0b9a72a52e4e24618661a9a05cca0777471f762",
+    "packages/sdk/client/package.json": "fcac6b277b4c755ef285e9f29ec979d584955a6f00df59d13cb8476d2ec1045c",
+    "packages/sdk/client/lib/index.js": "3e936345f36c1845ad07a66084a126cd0a9b511aa192501932874d7e09b9e7b8",
+    "packages/sdk/protocol/lib/index.js": "371c38ca3514797d86df5f4bb78a56c40a2637294b83aababe8145bec6a20253",
+    "packages/sdk/server/lib/index.js": "7b19ef78260b4a9287b9712074d9df63271a67bae752e5a26deb1fd17067340e",
+    "packages/bundle/sdk-minimal/cordis.patch.yml": "f2161270ce0c75af0b63cc53ed68e4ade9541ebc3ab68504bbb97b72ce035fb4",
+    "packages/boot/app-boot/lib/index.js": "b9423a378b2eaee317e4b162521522f491f3e668ccb647b768d486bb3a4835c1",
+    "packages/llm/llm-deepseek/lib/index.js": "43777f1cfa679401244f2fe052a295a01b7d5fcd817a09502ed3b60da8cc9654"
+  },
+  "executionEnabled": false
+}

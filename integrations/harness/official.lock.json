@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "source": "https://github.com/deepseek-ai/deepseek-harness",
+  "sourceCommit": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "sourceTag": "dsh-v0.2.1-rc.2",
+  "runtimeVersion": "0.2.1-rc.2",
+  "sdkVersion": "0.2.1-rc.2",
+  "nodeVersion": "22.22.1",
+  "zodOverride": "4.6.6",
+  "sourcePolicy": "Official npm packages and package-lock.json integrity; OnSet is not a build or runtime input.",
+  "capabilities": {
+    "persistentResume": "official resumeSession",
+    "approval": "ClipVault main-process broker with per-action fingerprint and expiry",
+    "stop": "per-task SDK worker close, process exit and broker cancellation",
+    "tools": ["list_files", "read_file", "write_file", "check_api", "verify_file", "run_check"]
+  },
+  "distribution": "resources/harness-runtime/manifest.json contains the platform-specific runtime hashes and package notices"
+}
