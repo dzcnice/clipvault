@@ -8,6 +8,7 @@ export * from './clipboard'
 export * from './credential-types'
 export * from './shortcut'
 export * from './workspace'
+export * from './workbench'
 
 /** IPC 通道名称常量（仅个人核心能力） */
 export const IPC_CHANNELS = {
@@ -28,6 +29,8 @@ export const IPC_CHANNELS = {
 
   // 剪贴板
   CLIPBOARD_GET_HISTORY: 'clipboard:getHistory',
+  CLIPBOARD_SAVE_SNAPSHOT: 'clipboard:saveSnapshot',
+  CLIPBOARD_GET_OCCURRENCES: 'clipboard:getOccurrences',
   CLIPBOARD_CLEAR_HISTORY: 'clipboard:clearHistory',
   CLIPBOARD_DELETE_ITEM: 'clipboard:deleteItem',
   CLIPBOARD_DELETE_ITEMS: 'clipboard:deleteItems',
@@ -80,6 +83,8 @@ export const IPC_CHANNELS = {
   BACKUP_LIST: 'backup:list',
   BACKUP_RESTORE: 'backup:restore',
   BACKUP_DELETE: 'backup:delete',
+  BACKUP_EXPORT: 'backup:export-portable',
+  BACKUP_IMPORT: 'backup:import-portable',
 
   // 窗口
   WINDOW_MINIMIZE: 'window:minimize',

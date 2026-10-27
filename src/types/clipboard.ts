@@ -15,15 +15,21 @@ export enum ClipboardContentType {
   /** 文件路径 */
   FILE = 'file'
 }
+export type ClipCategory = 'code' | 'error' | 'command' | 'link' | 'path' | 'credential' | 'secret' | 'image' | 'text'
 
 /** 剪贴板历史记录项 */
 export interface ClipboardItem {
+  category?: ClipCategory
+  projectId?: string | null
+  aiMeta?: { title: string; summary: string }
   /** 唯一标识 */
   id: string
   /** 内容类型 */
   type: ClipboardContentType
   /** 文本内容（TEXT/HTML类型） */
   content?: string
+  /** 密文损坏时禁止复制或作为任务上下文，原记录保留。 */
+  decryptError?: boolean
   /** 图片数据（base64，IMAGE类型，展示用） */
   imageData?: string
   /**
@@ -55,6 +61,16 @@ export interface ClipboardItem {
   detectedKeyType?: string
   /** 创建时间 */
   createdAt: number
+  /** 最近一次采集；取用记录不会改变它 */
+  lastCopiedAt?: number
+  /** 已记录的采集次数，旧库不推算丢失次数 */
+  copyCount?: number
+  /** 旧库时间可能已被覆盖，不能标作首次复制 */
+  firstSeenKnown?: boolean
+  /** 独立长期副本，不参加临时历史清理 */
+  isSaved?: boolean
+  savedAt?: number
+  savedFromId?: string
   /** 最后使用时间 */
   lastUsedAt?: number
   /** 使用次数 */
@@ -90,12 +106,21 @@ export interface UpdateSnippetInput {
 
 /** 剪贴板历史查询过滤 */
 export interface ClipboardFilter {
+  categories?: ClipCategory[]
+  sourceApps?: string[]
+  keywords?: string[]
+  category?: ClipCategory
+  projectId?: string
   /** 搜索关键词 */
   keyword?: string
+  /** HUD 保留预览文字的模糊/拼音首字母匹配；正文仍按包含匹配。 */
+  fuzzyPreview?: boolean
   /** 内容类型 */
   type?: ClipboardContentType
   /** 仅显示置顶 */
   pinnedOnly?: boolean
+  /** true 查询长期副本；false 查询临时历史；缺省包含两者 */
+  savedOnly?: boolean
   /** 仅显示快速片段 */
   snippetsOnly?: boolean
   /** 检测到的密钥类型 */
@@ -110,6 +135,15 @@ export interface ClipboardFilter {
   sourceApp?: string
   /** 折叠重复 hash（列表侧提示用，SQL 仍返回全量；渲染端可折叠） */
   collapseDuplicates?: boolean
+}
+
+/** 一次实际采集或旧库迁移记录；不保存内容副本 */
+export interface ClipboardOccurrence {
+  id: number
+  clipboardId: string
+  copiedAt: number
+  sourceApp?: string
+  isMigration: boolean
 }
 
 /** 剪贴板监听器状态 */
