@@ -128,6 +128,15 @@ describeOrSkip('C1 · clipboard 加密 · 写入 / 读取 roundtrip', () => {
     closeIntegrationDb()
   })
 
+  it('缺失 nonce 时报告损坏并保留原密文，不伪装成空内容', async () => {
+    const item = await addClipboardItem({ type: ClipboardContentType.TEXT, content: 'corrupt-record-fixture' })
+    const db = getActiveIntegrationDb()
+    const before = db.prepare('SELECT content_encrypted FROM clipboard_history WHERE id=?').get(item!.id)
+    db.prepare('UPDATE clipboard_history SET content_nonce=NULL WHERE id=?').run(item!.id)
+    expect(getClipboardItemById(item!.id)).toMatchObject({ decryptError: true })
+    expect(db.prepare('SELECT content_encrypted FROM clipboard_history WHERE id=?').get(item!.id)).toEqual(before)
+  })
+
   it('加密写入：明文列为 NULL，密文列非空，legacy=0', async () => {
     const item = await addClipboardItem({
       type: ClipboardContentType.TEXT,

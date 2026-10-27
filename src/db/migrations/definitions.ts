@@ -646,6 +646,40 @@ const migration023: MigrationDefinition = {
  * 所有 migration，按 version 升序。
  * 新增 migration 时请保证 version 单调 +1 并 append 到末尾。
  */
+const migration024: MigrationDefinition = {
+  version: 24,
+  name: '024_clipboard_occurrences_and_saved',
+  sql: `
+    ALTER TABLE clipboard_history ADD COLUMN last_copied_at INTEGER;
+    ALTER TABLE clipboard_history ADD COLUMN copy_count INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE clipboard_history ADD COLUMN first_seen_known INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE clipboard_history ADD COLUMN is_saved INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE clipboard_history ADD COLUMN saved_at INTEGER;
+    ALTER TABLE clipboard_history ADD COLUMN saved_from_id TEXT;
+    UPDATE clipboard_history SET last_copied_at = created_at;
+
+    CREATE TABLE clipboard_occurrences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clipboard_id TEXT NOT NULL REFERENCES clipboard_history(id) ON DELETE CASCADE,
+      copied_at INTEGER NOT NULL,
+      source_app TEXT,
+      is_migration INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT INTO clipboard_occurrences (clipboard_id, copied_at, source_app, is_migration)
+      SELECT id, created_at, source_app, 1 FROM clipboard_history WHERE is_snippet = 0;
+    CREATE INDEX idx_clip_occurrence_item ON clipboard_occurrences(clipboard_id, copied_at DESC);
+    CREATE INDEX idx_clip_occurrence_source ON clipboard_occurrences(source_app, clipboard_id);
+    CREATE INDEX idx_clip_recency ON clipboard_history(workspace, is_saved, is_pinned, last_copied_at DESC);
+    CREATE UNIQUE INDEX idx_clip_saved_source ON clipboard_history(saved_from_id) WHERE is_saved = 1;
+  `
+}
+
+import { workbenchMigration } from './workbench'
+import { harnessSessionMigration } from './harness'
+import { clipboardCategoryMigration, resourceRolesMigration } from './native-resources'
+import { inboxMigration } from './inbox'
+import { scheduleMigration } from './schedule'
+
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   migration001,
   migration002,
@@ -669,5 +703,12 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   migration020,
   migration021,
   migration022,
-  migration023
+  migration023,
+  migration024,
+  workbenchMigration,
+  harnessSessionMigration,
+  clipboardCategoryMigration,
+  resourceRolesMigration,
+  inboxMigration,
+  scheduleMigration
 ]

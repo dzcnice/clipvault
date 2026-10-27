@@ -14,6 +14,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { logger } from '../main/utils/logger'
 import { runMigrations } from './migrations'
+import { backupBeforeMigration } from './migration-backup'
 
 let db: Database.Database | null = null
 
@@ -41,12 +42,17 @@ export function initDatabase(): Database.Database {
   // 创建数据库连接
   db = new Database(dbPath)
 
-  // 启用 WAL 模式提高并发性能
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-
   // 执行 Schema 初始化
-  initSchema(db)
+  try {
+    backupBeforeMigration(db)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    initSchema(db)
+  } catch (error) {
+    db.close()
+    db = null
+    throw error
+  }
 
   logger.info('[DB] Database initialized successfully')
   return db

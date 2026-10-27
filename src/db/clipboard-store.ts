@@ -8,9 +8,14 @@ import * as crypto from 'crypto'
 import { getDatabase, transaction } from './connection'
 import * as imageStore from '../main/storage/image-store'
 import * as vault from '../main/crypto/vault'
+import { getPrefs } from '../main/prefs'
+import { fuzzyMatch } from '../utils/fuzzy-search'
+import { classifyClip, matchProject } from '../main/clipboard/classify'
+import { listProjects } from './workbench-store'
 import type {
   ClipboardFilter,
   ClipboardItem,
+  ClipboardOccurrence,
   CreateClipboardItemInput,
   CreateSnippetInput,
   UpdateSnippetInput,
@@ -18,6 +23,20 @@ import type {
 } from '../types'
 
 export const E_VAULT_LOCKED = 'E_VAULT_LOCKED'
+
+export function clipboardGroups(): { categories: Record<string, number>; projects: Record<string, number>; total: number; pinned: number; saved: number } {
+  if (!vault.isUnlocked()) throw new Error(E_VAULT_LOCKED)
+  const db = getDatabase()
+  const rows = db.prepare('SELECT category, project_id, is_pinned, is_saved, COUNT(*) AS n FROM clipboard_history WHERE is_snippet = 0 GROUP BY category, project_id, is_pinned, is_saved').all() as Array<{ category: string; project_id: string; is_pinned: number; is_saved: number; n: number }>
+  const result = { categories: {} as Record<string, number>, projects: {} as Record<string, number>, total: 0, pinned: 0, saved: 0 }
+  for (const row of rows) {
+    if (row.is_saved) { result.saved += row.n; continue }
+    result.total += row.n; if (row.is_pinned) result.pinned += row.n
+    const category = row.category || 'text'; result.categories[category] = (result.categories[category] || 0) + row.n
+    if (row.project_id) result.projects[row.project_id] = (result.projects[row.project_id] || 0) + row.n
+  }
+  return result
+}
 
 interface CodedError extends Error {
   code?: string
@@ -49,6 +68,15 @@ interface ClipboardRow {
   preview_nonce: Buffer | Uint8Array | null
   content_plaintext_legacy: number
   pinned_at: number | null
+  last_copied_at: number | null
+  copy_count: number
+  first_seen_known: number
+  is_saved: number
+  saved_at: number | null
+  saved_from_id: string | null
+  category: ClipboardItem['category'] | null
+  project_id: string | null
+  ai_meta: string | null
 }
 
 interface CountRow {
@@ -73,7 +101,10 @@ function asBuffer(value: Buffer | Uint8Array): Buffer {
   return Buffer.isBuffer(value) ? value : Buffer.from(value)
 }
 
-function decryptRowContent(row: ClipboardRow): { content: string | null; preview: string } {
+function decryptRowContent(row: ClipboardRow): { content: string | null; preview: string; decryptError?: boolean } {
+  if (Boolean(row.content_encrypted) !== Boolean(row.content_nonce) || Boolean(row.preview_encrypted) !== Boolean(row.preview_nonce)) {
+    return { content: null, preview: '此条历史加密数据不完整，原记录已保留', decryptError: true }
+  }
   const hasCipher = Boolean(row.content_encrypted && row.content_nonce)
   const hasPreviewCipher = Boolean(row.preview_encrypted && row.preview_nonce)
   if (!hasCipher && !hasPreviewCipher && !row.content && !row.preview) {
@@ -93,7 +124,7 @@ function decryptRowContent(row: ClipboardRow): { content: string | null; preview
         asBuffer(row.content_nonce as Buffer | Uint8Array)
       )
     } catch {
-      content = row.content ?? null
+      return { content: null, preview: '此条历史无法解密，原记录已保留', decryptError: true }
     }
   } else {
     content = row.content ?? null
@@ -105,7 +136,7 @@ function decryptRowContent(row: ClipboardRow): { content: string | null; preview
         asBuffer(row.preview_nonce as Buffer | Uint8Array)
       )
     } catch {
-      preview = row.preview ?? ''
+      return { content: null, preview: '此条历史无法解密，原记录已保留', decryptError: true }
     }
   }
   return { content, preview }
@@ -128,11 +159,17 @@ function rowToClipboardItem(
       imageData = row.image_data
     }
   }
-  const { content, preview } = decryptRowContent(row)
+  const { content, preview, decryptError } = decryptRowContent(row)
+  let aiMeta: ClipboardItem['aiMeta']
+  if (row.ai_meta) try { aiMeta = JSON.parse(vault.decryptWithDEK(row.ai_meta)) as ClipboardItem['aiMeta'] } catch { /* Preserve corrupt optional metadata and original content. */ }
   return {
     id: row.id,
     type: row.type as ClipboardItem['type'],
     content: content || undefined,
+    category: row.category ?? classifyClip({ type: row.type, text: content ?? row.file_path ?? '' }).category,
+    projectId: row.project_id,
+    aiMeta,
+    ...(decryptError ? { decryptError: true } : {}),
     imageData,
     imagePath,
     filePath: row.file_path || undefined,
@@ -147,6 +184,12 @@ function rowToClipboardItem(
     tags,
     detectedKeyType: row.detected_key_type || undefined,
     createdAt: row.created_at,
+    lastCopiedAt: row.last_copied_at ?? row.created_at,
+    copyCount: row.copy_count,
+    firstSeenKnown: row.first_seen_known === 1,
+    isSaved: row.is_saved === 1,
+    savedAt: row.saved_at ?? undefined,
+    savedFromId: row.saved_from_id ?? undefined,
     lastUsedAt: row.last_used_at || undefined,
     useCount: row.use_count
   }
@@ -180,6 +223,7 @@ export async function addClipboardItem(
   detectedKeyType: string | undefined = undefined,
   workspace: WorkspaceContext = DEFAULT_WORKSPACE
 ): Promise<ClipboardItem | null> {
+  assertVaultUnlocked()
   const db = getDatabase()
   const now = Date.now()
   const id = uuidv4()
@@ -191,94 +235,112 @@ export async function addClipboardItem(
     size = Buffer.byteLength(content, 'utf8')
   } else if (input.type === 'image') {
     if (input.imageData) {
-      imagePath = await imageStore.saveImageDataUrl(input.imageData)
       content = ''
-      size = input.imageData.length
+      size = Buffer.byteLength(input.imageData.split(',')[1] ?? '', 'base64')
     }
   } else if (input.type === 'file') {
     content = input.filePath || ''
-    size = content.length
+    size = Buffer.byteLength(content, 'utf8')
   }
   const hashSource = input.type === 'image' ? input.imageData || imagePath || '' : content
   const hash = generateHash(hashSource)
-  const existing = db
-    .prepare('SELECT id FROM clipboard_history WHERE hash = ? AND is_snippet = 0')
-    .get(hash) as { id: string } | undefined
+  const category = classifyClip({ type: input.type, text: content, sourceApp: input.sourceApp }).category
+  const projectId = matchProject(content, listProjects())
+  const findExisting = (): { id: string } | undefined => db
+    .prepare('SELECT id FROM clipboard_history WHERE hash = ? AND type = ? AND workspace = ? AND is_snippet = 0 AND is_saved = 0')
+    .get(hash, input.type, workspace) as { id: string } | undefined
+  const recordCapture = (clipboardId: string): void => {
+    db.prepare(`UPDATE clipboard_history
+      SET source_app = CASE WHEN ? >= COALESCE(last_copied_at, created_at) THEN ? ELSE source_app END,
+          last_copied_at = MAX(COALESCE(last_copied_at, created_at), ?),
+          created_at = CASE WHEN first_seen_known = 1 THEN MIN(created_at, ?) ELSE created_at END,
+          copy_count = copy_count + 1, category = ?, project_id = COALESCE(?, project_id)
+      WHERE id = ?`).run(now, input.sourceApp ?? null, now, now, category, projectId, clipboardId)
+    db.prepare('INSERT INTO clipboard_occurrences (clipboard_id, copied_at, source_app) VALUES (?, ?, ?)')
+      .run(clipboardId, now, input.sourceApp ?? null)
+  }
+  const existing = findExisting()
   if (existing) {
-    if (imagePath) imageStore.deleteImageFile(imagePath)
-    db.prepare(
-      `
-      UPDATE clipboard_history
-      SET created_at = ?, use_count = use_count + 1, last_used_at = ?
-      WHERE id = ?
-    `
-    ).run(now, now, existing.id)
+    transaction(() => recordCapture(existing.id))
+    cleanupOldHistory(resolveMaxHistorySize())
     return getClipboardItemById(existing.id)
+  }
+  if (input.type === 'image') {
+    if (!input.imageData) throw new Error('图片数据不可用')
+    imagePath = await imageStore.saveImageDataUrl(input.imageData)
+    if (!imagePath) throw new Error('保存图片失败')
   }
   const preview = generatePreview(
     input.type === 'image' ? '[图片]' : input.content || input.filePath || '[图片]'
   )
-  assertVaultUnlocked()
   const plainContent = input.type === 'text' || input.type === 'html' ? content : ''
-  const { cipher: contentCipher, nonce: contentNonce } = vault.encryptBytesWithDEK(plainContent)
-  const { cipher: previewCipher, nonce: previewNonce } = vault.encryptBytesWithDEK(preview)
-  db.prepare(
-    `
-    INSERT INTO clipboard_history
-    (id, type, content, image_data, image_path, file_path, preview, hash, size, source_app,
-     is_pinned, is_snippet, detected_key_type, created_at, use_count, workspace,
-     content_encrypted, content_nonce, preview_encrypted, preview_nonce, content_plaintext_legacy)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, ?, ?, ?, 0)
-  `
-  ).run(
-    id,
-    input.type,
-    null,
-    null,
-    imagePath,
-    input.filePath || null,
-    '',
-    hash,
-    size,
-    input.sourceApp || null,
-    detectedKeyType || null,
-    now,
-    workspace,
-    contentCipher,
-    contentNonce,
-    previewCipher,
-    previewNonce
-  )
+  let resultId = id
+  try {
+    const { cipher: contentCipher, nonce: contentNonce } = vault.encryptBytesWithDEK(plainContent)
+    const { cipher: previewCipher, nonce: previewNonce } = vault.encryptBytesWithDEK(preview)
+    transaction(() => {
+      assertVaultUnlocked()
+      const concurrent = findExisting()
+      if (concurrent) {
+        recordCapture(concurrent.id)
+        resultId = concurrent.id
+        return
+      }
+      db.prepare(`
+        INSERT INTO clipboard_history
+        (id, type, content, image_data, image_path, file_path, preview, hash, size, source_app,
+         is_pinned, is_snippet, detected_key_type, created_at, use_count, workspace,
+         content_encrypted, content_nonce, preview_encrypted, preview_nonce, content_plaintext_legacy,
+         last_copied_at, first_seen_known, category, project_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)
+      `).run(
+        id, input.type, null, null, imagePath, input.filePath || null, '', hash, size,
+        input.sourceApp || null, detectedKeyType || null, now, workspace,
+        contentCipher, contentNonce, previewCipher, previewNonce, now, category, projectId
+      )
+      db.prepare('INSERT INTO clipboard_occurrences (clipboard_id, copied_at, source_app) VALUES (?, ?, ?)')
+        .run(id, now, input.sourceApp ?? null)
+    })
+  } catch (error) {
+    if (imagePath) imageStore.deleteImageFile(imagePath)
+    throw error
+  }
+  if (resultId !== id && imagePath) imageStore.deleteImageFile(imagePath)
   cleanupOldHistory(resolveMaxHistorySize())
-  return getClipboardItemById(id)
+  return getClipboardItemById(resultId)
 }
 
-export function getClipboardItemById(id: string): ClipboardItem | null {
+export function getClipboardItemById(id: string, loadImage = true): ClipboardItem | null {
   const db = getDatabase()
   const row = db.prepare('SELECT * FROM clipboard_history WHERE id = ?').get(id) as
     | ClipboardRow
     | undefined
   if (!row) return null
-  return rowToClipboardItem(row, getClipboardTags(id), true)
+  return rowToClipboardItem(row, getClipboardTags(id), loadImage)
 }
 
-export function listClipboardHistory(
+function historyQuery(
   filter: ClipboardFilter | undefined = undefined,
-  limit = 100,
-  offset = 0,
   workspace: WorkspaceContext = DEFAULT_WORKSPACE
-): { items: ClipboardItem[]; total: number } {
-  const db = getDatabase()
+): { whereClause: string; params: Array<string | number>; keyword: string } {
   let whereClause = 'workspace = ?'
   const params: Array<string | number> = [workspace]
   const memoryKeyword = filter?.keyword?.trim() || ''
   if (filter) {
+    if (Array.isArray(filter.categories) && filter.categories.length) { const values = filter.categories.slice(0, 9); whereClause += ` AND category IN (${values.map(() => '?').join(',')})`; params.push(...values) }
+    if (Array.isArray(filter.sourceApps) && filter.sourceApps.length) { const values = filter.sourceApps.slice(0, 20); whereClause += ` AND (source_app IN (${values.map(() => '?').join(',')}) OR id IN (SELECT clipboard_id FROM clipboard_occurrences WHERE source_app IN (${values.map(() => '?').join(',')})))`; params.push(...values, ...values) }
+    if (filter.category) { whereClause += ' AND category = ?'; params.push(filter.category) }
+    if (filter.projectId) { whereClause += ' AND project_id = ?'; params.push(filter.projectId) }
     if (filter.type) {
       whereClause += ' AND type = ?'
       params.push(filter.type)
     }
     if (filter.pinnedOnly) {
       whereClause += ' AND is_pinned = 1'
+    }
+    if (typeof filter.savedOnly === 'boolean') {
+      whereClause += ' AND is_saved = ?'
+      params.push(filter.savedOnly ? 1 : 0)
     }
     if (filter.snippetsOnly) {
       whereClause += ' AND is_snippet = 1'
@@ -288,16 +350,16 @@ export function listClipboardHistory(
       params.push(filter.detectedKeyType)
     }
     if (filter.startTime) {
-      whereClause += ' AND created_at >= ?'
+      whereClause += ' AND COALESCE(last_copied_at, created_at) >= ?'
       params.push(filter.startTime)
     }
     if (filter.endTime) {
-      whereClause += ' AND created_at <= ?'
+      whereClause += ' AND COALESCE(last_copied_at, created_at) <= ?'
       params.push(filter.endTime)
     }
     if (filter.sourceApp) {
-      whereClause += ' AND source_app = ?'
-      params.push(filter.sourceApp)
+      whereClause += ' AND (source_app = ? OR id IN (SELECT clipboard_id FROM clipboard_occurrences WHERE source_app = ?))'
+      params.push(filter.sourceApp, filter.sourceApp)
     }
     if (filter.tags && filter.tags.length > 0) {
       const tagPlaceholders = filter.tags.map(() => '?').join(',')
@@ -305,7 +367,32 @@ export function listClipboardHistory(
       params.push(...filter.tags)
     }
   }
-  if (!memoryKeyword) {
+  return { whereClause, params, keyword: memoryKeyword.toLowerCase() }
+}
+
+const HISTORY_ORDER = 'is_pinned DESC, COALESCE(last_copied_at, created_at) DESC, id ASC'
+
+function matchesKeyword(item: ClipboardItem, keyword: string, fuzzyPreview = false): boolean {
+  if ([item.content, item.preview, item.aiMeta?.title, item.aiMeta?.summary, item.snippetName, item.filePath, item.sourceApp, ...item.tags]
+    .filter(Boolean).join('\n').toLowerCase().includes(keyword)) return true
+  return fuzzyPreview && Boolean(fuzzyMatch(keyword, item.snippetName || item.preview.slice(0, 80)))
+}
+
+function pageSize(value: number, fallback: number, maximum: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(Math.floor(value), maximum)) : fallback
+}
+
+export function listClipboardHistory(
+  filter?: ClipboardFilter,
+  limit = 100,
+  offset = 0,
+  workspace: WorkspaceContext = DEFAULT_WORKSPACE
+): { items: ClipboardItem[]; total: number } {
+  const db = getDatabase()
+  const { whereClause, params, keyword: memoryKeyword } = historyQuery(filter, workspace)
+  limit = pageSize(limit, 100, 5000)
+  offset = pageSize(offset, 0, Number.MAX_SAFE_INTEGER)
+  if (!memoryKeyword && !filter?.keywords?.length) {
     const countRow = db
       .prepare(`SELECT COUNT(*) as count FROM clipboard_history WHERE ${whereClause}`)
       .get(...params) as CountRow
@@ -315,7 +402,7 @@ export function listClipboardHistory(
         `
       SELECT * FROM clipboard_history
       WHERE ${whereClause}
-      ORDER BY is_pinned DESC, created_at DESC
+      ORDER BY ${HISTORY_ORDER}
       LIMIT ? OFFSET ?
     `
       )
@@ -327,17 +414,93 @@ export function listClipboardHistory(
       `
       SELECT * FROM clipboard_history
       WHERE ${whereClause}
-      ORDER BY is_pinned DESC, created_at DESC
+      ORDER BY ${HISTORY_ORDER}
     `
     )
     .all(...params) as ClipboardRow[]
   const allItems = rowsToItems(allRows, false)
-  const kwLower = memoryKeyword.toLowerCase()
-  const filtered = allItems.filter((it) => {
-    const hay = `${it.content ?? ''}\n${it.preview ?? ''}\n${it.snippetName ?? ''}`
-    return hay.toLowerCase().includes(kwLower)
-  })
+  const filtered = allItems.filter((it) => matchesKeyword(it, memoryKeyword, filter?.fuzzyPreview) && (filter?.keywords ?? []).slice(0, 10).every(word => matchesKeyword(it, word.toLowerCase(), filter?.fuzzyPreview)))
   return { items: filtered.slice(offset, offset + limit), total: filtered.length }
+}
+
+/** 全库关键词查询分批解密，并在批次间让出主进程；不写明文索引。 */
+export async function searchClipboardHistory(
+  filter?: ClipboardFilter,
+  limit = 100,
+  offset = 0,
+  signal?: AbortSignal
+): Promise<{ items: ClipboardItem[]; total: number }> {
+  assertVaultUnlocked()
+  if (!filter?.keyword?.trim() && !filter?.keywords?.length) return listClipboardHistory(filter, limit, offset)
+  const db = getDatabase()
+  const { whereClause, params, keyword } = historyQuery(filter)
+  limit = pageSize(limit, 100, 5000)
+  offset = pageSize(offset, 0, 100000)
+  const end = limit + offset
+  const ceiling = (db.prepare('SELECT COALESCE(MAX(rowid), 0) AS n FROM clipboard_history').get() as { n: number }).n
+  let cursor = 0
+  let total = 0
+  let found: ClipboardItem[] = []
+  const compare = (a: ClipboardItem, b: ClipboardItem): number =>
+    Number(b.isPinned) - Number(a.isPinned) || (b.lastCopiedAt ?? b.createdAt) - (a.lastCopiedAt ?? a.createdAt) || a.id.localeCompare(b.id)
+  while (cursor < ceiling) {
+    if (signal?.aborted) throw new Error('查询已取消')
+    assertVaultUnlocked()
+    const rows = db.prepare(`SELECT rowid AS cursor, * FROM clipboard_history
+      WHERE rowid > ? AND rowid <= ? AND ${whereClause} ORDER BY rowid LIMIT 64`)
+      .all(cursor, ceiling, ...params) as Array<ClipboardRow & { cursor: number }>
+    if (!rows.length) break
+    cursor = rows[rows.length - 1]!.cursor
+    const matches = rowsToItems(rows).filter(item => matchesKeyword(item, keyword, filter?.fuzzyPreview) && (filter?.keywords ?? []).slice(0, 10).every(word => matchesKeyword(item, word.toLowerCase(), filter?.fuzzyPreview)))
+    total += matches.length
+    found.push(...matches)
+    if (found.length > end) found = found.sort(compare).slice(0, end)
+    await new Promise<void>(resolve => setImmediate(resolve))
+  }
+  if (signal?.aborted) throw new Error('查询已取消')
+  assertVaultUnlocked()
+  return { items: found.sort(compare).slice(offset, end), total }
+}
+
+export function getClipboardOccurrences(id: string, limit = 50): ClipboardOccurrence[] {
+  const rows = getDatabase().prepare(`SELECT * FROM clipboard_occurrences
+    WHERE clipboard_id = ? ORDER BY copied_at DESC, id DESC LIMIT ?`).all(id, pageSize(limit, 50, 200)) as
+    Array<{ id: number; clipboard_id: string; copied_at: number; source_app: string | null; is_migration: number }>
+  return rows.map(row => ({ id: row.id, clipboardId: row.clipboard_id, copiedAt: row.copied_at,
+    sourceApp: row.source_app ?? undefined, isMigration: row.is_migration === 1 }))
+}
+
+/** 长期保存为独立行和独立图片，删除原历史不会带走快照。 */
+export function saveClipboardSnapshot(id: string): ClipboardItem {
+  assertVaultUnlocked()
+  const db = getDatabase()
+  const source = db.prepare('SELECT * FROM clipboard_history WHERE id = ?').get(id) as ClipboardRow | undefined
+  if (!source) throw new Error('记录不存在')
+  if (source.is_saved || source.is_snippet) return getClipboardItemById(id)!
+  const previous = db.prepare('SELECT id FROM clipboard_history WHERE saved_from_id = ? AND is_saved = 1').get(id) as { id: string } | undefined
+  if (previous) return getClipboardItemById(previous.id)!
+  const savedId = uuidv4()
+  const imagePath = source.image_path ? imageStore.copyImageFile(source.image_path) : null
+  try {
+    transaction(() => {
+      db.prepare(`INSERT INTO clipboard_history
+        (id, type, content, image_data, image_path, file_path, preview, hash, size, source_app,
+        is_pinned, is_snippet, detected_key_type, created_at, last_copied_at, copy_count, first_seen_known,
+        workspace, content_encrypted, content_nonce, preview_encrypted, preview_nonce, content_plaintext_legacy,
+        is_saved, saved_at, saved_from_id, category, project_id, ai_meta)
+        SELECT ?, type, content, image_data, ?, file_path, preview, hash, size, source_app,
+        0, 0, detected_key_type, created_at, last_copied_at, copy_count, first_seen_known,
+        workspace, content_encrypted, content_nonce, preview_encrypted, preview_nonce, content_plaintext_legacy,
+        1, ?, id, category, project_id, ai_meta FROM clipboard_history WHERE id = ?`).run(savedId, imagePath, Date.now(), id)
+      db.prepare('INSERT INTO clipboard_tags (clipboard_id, tag_name) SELECT ?, tag_name FROM clipboard_tags WHERE clipboard_id = ?').run(savedId, id)
+      db.prepare(`INSERT INTO clipboard_occurrences (clipboard_id, copied_at, source_app, is_migration)
+        SELECT ?, copied_at, source_app, is_migration FROM clipboard_occurrences WHERE clipboard_id = ?`).run(savedId, id)
+    })
+  } catch (error) {
+    if (imagePath) imageStore.deleteImageFile(imagePath)
+    throw error
+  }
+  return getClipboardItemById(savedId)!
 }
 
 function rowsToItems(rows: ClipboardRow[], loadImage = false): ClipboardItem[] {
@@ -375,10 +538,11 @@ export function deleteClipboardItem(id: string): boolean {
   const row = db
     .prepare('SELECT image_path FROM clipboard_history WHERE id = ?')
     .get(id) as { image_path: string | null } | undefined
-  if (row?.image_path) {
-    imageStore.deleteImageFile(row.image_path)
-  }
   const result = db.prepare('DELETE FROM clipboard_history WHERE id = ?').run(id)
+  if (result.changes > 0 && row?.image_path) {
+    const reference = db.prepare('SELECT id FROM clipboard_history WHERE image_path = ? LIMIT 1').get(row.image_path)
+    if (!reference) imageStore.deleteImageFile(row.image_path)
+  }
   return result.changes > 0
 }
 
@@ -396,17 +560,11 @@ export function deleteClipboardOlderThan(cutoffMs: number, keepPinned = true): n
   const db = getDatabase()
   const cutoff = typeof cutoffMs === 'number' && Number.isFinite(cutoffMs) ? cutoffMs : 0
   if (cutoff <= 0) return 0
-  let sql = 'SELECT id, image_path FROM clipboard_history WHERE is_snippet = 0 AND created_at < ?'
+  let sql = 'SELECT id, image_path FROM clipboard_history WHERE is_snippet = 0 AND is_saved = 0 AND COALESCE(last_copied_at, created_at) < ?'
   if (keepPinned) sql += ' AND is_pinned = 0'
   const rows = db.prepare(sql).all(cutoff) as IdImageRow[]
   if (!rows.length) return 0
-  const ids = rows.map((r) => r.id)
-  const placeholders = ids.map(() => '?').join(',')
-  db.prepare(`DELETE FROM clipboard_history WHERE id IN (${placeholders})`).run(...ids)
-  for (const r of rows) {
-    if (r.image_path) imageStore.deleteImageFile(r.image_path)
-  }
-  return ids.length
+  return deleteClipboardItems(rows.map(row => row.id))
 }
 
 export function setClipboardPinned(ids: string[], pinned: boolean): number {
@@ -430,16 +588,10 @@ export function clearClipboardHistory(): number {
   const db = getDatabase()
   const rows = db
     .prepare(
-      'SELECT image_path FROM clipboard_history WHERE is_pinned = 0 AND is_snippet = 0 AND image_path IS NOT NULL'
+      'SELECT id FROM clipboard_history WHERE is_pinned = 0 AND is_snippet = 0 AND is_saved = 0'
     )
-    .all() as Array<{ image_path: string | null }>
-  for (const r of rows) {
-    imageStore.deleteImageFile(r.image_path)
-  }
-  const result = db
-    .prepare('DELETE FROM clipboard_history WHERE is_pinned = 0 AND is_snippet = 0')
-    .run()
-  return result.changes
+    .all() as Array<{ id: string }>
+  return deleteClipboardItems(rows.map(row => row.id))
 }
 
 export function toggleClipboardPin(id: string): boolean {
@@ -620,96 +772,38 @@ export function getSnippets(workspace: WorkspaceContext = DEFAULT_WORKSPACE): Cl
 }
 
 const MAX_HISTORY_DEFAULT = 500
-const MAX_PINNED = 200
-const IMAGE_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const NON_IMAGE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 
 function resolveMaxHistorySize(): number {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getPrefs } = require('../main/prefs') as {
-      getPrefs: () => { maxHistorySize?: number }
-    }
-    const n = getPrefs()?.maxHistorySize
-    if (typeof n === 'number' && n >= 50 && n <= 5000) return Math.floor(n)
-  } catch {
-    /* prefs 未就绪时走默认 */
-  }
-  return MAX_HISTORY_DEFAULT
+  return getPrefs().maxHistorySize ?? MAX_HISTORY_DEFAULT
 }
 
-function cleanupOldHistory(maxSize = MAX_HISTORY_DEFAULT): void {
+/** 自动清理仅作用于临时、未置顶历史；长期副本独立保留。 */
+export function cleanupOldHistory(maxSize = resolveMaxHistorySize()): number {
+  const prefs = getPrefs()
   const db = getDatabase()
-  const nonPinnedCount = db
-    .prepare(
-      'SELECT COUNT(*) as count FROM clipboard_history WHERE is_pinned = 0 AND is_snippet = 0'
-    )
-    .get() as CountRow
-  if (nonPinnedCount.count > maxSize) {
-    const deleteCount = nonPinnedCount.count - maxSize
-    const rows = db
-      .prepare(
-        `
-        SELECT id, image_path FROM clipboard_history
-        WHERE is_pinned = 0 AND is_snippet = 0
-        ORDER BY created_at ASC
-        LIMIT ?
-      `
-      )
-      .all(deleteCount) as IdImageRow[]
-    const ids = rows.map((r) => r.id)
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',')
-      db.prepare(`DELETE FROM clipboard_history WHERE id IN (${placeholders})`).run(...ids)
-      for (const r of rows) {
-        if (r.image_path) imageStore.deleteImageFile(r.image_path)
-      }
+  const rows = db.prepare(`SELECT id, type, size, COALESCE(last_copied_at, created_at) AS copied_at
+    FROM clipboard_history WHERE is_pinned = 0 AND is_snippet = 0 AND is_saved = 0
+    AND NOT EXISTS (SELECT 1 FROM wb_session_clipboard_refs r WHERE r.clipboard_id=clipboard_history.id)
+    ORDER BY COALESCE(last_copied_at, created_at) DESC, id ASC`).all() as
+    Array<{ id: string; type: string; size: number; copied_at: number }>
+  const now = Date.now()
+  const day = 86400000
+  const maxBytes = (prefs.historyMaxSizeMb ?? 0) * 1024 * 1024
+  let retained = 0
+  let bytes = 0
+  const remove: string[] = []
+  for (const row of rows) {
+    const expired = (prefs.historyRetentionDays > 0 && row.copied_at < now - prefs.historyRetentionDays * day)
+      || (row.type === 'image' && prefs.imageRetentionDays > 0 && row.copied_at < now - prefs.imageRetentionDays * day)
+    const exceeds = retained >= maxSize || (maxBytes > 0 && bytes + row.size > maxBytes)
+    if (expired || exceeds) {
+      remove.push(row.id)
+    } else {
+      retained++
+      bytes += row.size
     }
   }
-  const pinnedCount = db
-    .prepare(
-      'SELECT COUNT(*) as count FROM clipboard_history WHERE is_pinned = 1 AND is_snippet = 0'
-    )
-    .get() as CountRow
-  if (pinnedCount.count > MAX_PINNED) {
-    const extra = pinnedCount.count - MAX_PINNED
-    const rows = db
-      .prepare(
-        `
-        SELECT id, image_path FROM clipboard_history
-        WHERE is_pinned = 1 AND is_snippet = 0
-        ORDER BY COALESCE(pinned_at, 0) ASC
-        LIMIT ?
-      `
-      )
-      .all(extra) as IdImageRow[]
-    const ids = rows.map((r) => r.id)
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',')
-      db.prepare(`DELETE FROM clipboard_history WHERE id IN (${placeholders})`).run(...ids)
-      for (const r of rows) {
-        if (r.image_path) imageStore.deleteImageFile(r.image_path)
-      }
-    }
-  }
-  const imageTtlCutoff = Date.now() - IMAGE_TTL_MS
-  const oldImages = db
-    .prepare(
-      `
-      SELECT id, image_path FROM clipboard_history
-      WHERE type = 'image' AND is_pinned = 0 AND is_snippet = 0 AND created_at < ?
-    `
-    )
-    .all(imageTtlCutoff) as IdImageRow[]
-  if (oldImages.length > 0) {
-    const ids = oldImages.map((r) => r.id)
-    const placeholders = ids.map(() => '?').join(',')
-    db.prepare(`DELETE FROM clipboard_history WHERE id IN (${placeholders})`).run(...ids)
-    for (const r of oldImages) {
-      if (r.image_path) imageStore.deleteImageFile(r.image_path)
-    }
-  }
-  void NON_IMAGE_TTL_MS
+  return deleteClipboardItems(remove)
 }
 
 export async function backfillClipboardEncryption(
