@@ -8,6 +8,8 @@ let fakeClipText = ''
 let formats: string[] = []
 let fileNameW = Buffer.alloc(0)
 let currentApp = ''
+let imageBytes = Buffer.alloc(0)
+let refreshSource: (() => Promise<string>) | undefined
 
 vi.mock('electron', () => ({
   app: {
@@ -24,11 +26,11 @@ vi.mock('electron', () => ({
     },
     writeImage: (): void => {},
     readImage: () => ({
-      isEmpty: () => true,
-      toDataURL: () => '',
+      isEmpty: () => imageBytes.length === 0,
+      toDataURL: () => `data:image/png;base64,${imageBytes.toString('base64')}`,
       toJPEG: () => Buffer.alloc(0),
-      getSize: () => ({ width: 0, height: 0 }),
-      toBitmap: () => Buffer.alloc(0)
+      getSize: () => ({ width: 40, height: 20 }),
+      toBitmap: () => imageBytes
     }),
     readHTML: () => '',
     readBuffer: (): Buffer => fileNameW,
@@ -42,7 +44,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./source-app', () => ({
   getForegroundAppName: (): string => currentApp,
-  refreshForegroundAppName: async (): Promise<string> => currentApp,
+  refreshForegroundAppName: async (): Promise<string> => refreshSource ? refreshSource() : currentApp,
   isAppExcluded: (name: string | undefined, list: string[]): boolean => {
     if (!name || !list.length) return false
     const n = name.toLowerCase()
@@ -65,6 +67,8 @@ describe('ClipboardMonitor', () => {
     formats = []
     fileNameW = Buffer.alloc(0)
     currentApp = ''
+    imageBytes = Buffer.alloc(0)
+    refreshSource = undefined
     monitor = new ClipboardMonitor({ pollInterval: 40, excludedApps: [] })
   })
 
@@ -116,5 +120,52 @@ describe('ClipboardMonitor', () => {
     fakeClipText = 'next-clip'
     await sleep(120)
     expect(monitor.getGeneration()).toBeGreaterThan(g0)
+  })
+
+  it.each(['pause', 'self-write'])('来源查询尚未返回时 %s 不会捕获过期内容', async (action) => {
+    let finish!: (app: string) => void
+    let started!: () => void
+    const querying = new Promise<void>(resolve => { started = resolve })
+    refreshSource = () => { started(); return new Promise(resolve => { finish = resolve }) }
+    monitor.updateSettings({ excludedApps: ['excluded'] })
+    const change = vi.fn()
+    monitor.on('change', change)
+    monitor.start()
+    fakeClipText = 'candidate'
+    await querying
+    if (action === 'pause') monitor.stop()
+    else monitor.writeText('copied-by-app')
+    finish('Editor')
+    await sleep(20)
+    expect(change).not.toHaveBeenCalled()
+  })
+
+  it('识别图片中间区域变化，不能只比较头尾像素', async () => {
+    const change = vi.fn()
+    monitor.on('change', change)
+    formats = ['image/png']
+    imageBytes = Buffer.alloc(3200)
+    monitor.start()
+    imageBytes[1600] = 255
+    await sleep(100)
+    expect(change).toHaveBeenCalledTimes(1)
+  })
+
+  it('图片大小限制按保存的原始字节执行', async () => {
+    const change = vi.fn()
+    monitor.on('change', change)
+    monitor.updateSettings({ maxImageSize: 1 })
+    monitor.start()
+    formats = ['image/png']
+    imageBytes = Buffer.alloc(2048)
+    await sleep(100)
+    expect(change).not.toHaveBeenCalled()
+  })
+
+  it('无效图片明确报错，不能报告已复制', () => {
+    expect(() => monitor.writeImage('invalid')).toThrow('图片数据不可用')
+    expect(() => monitor.writeImagePaste('invalid', 'C:\\fixture.png', 'both')).toThrow('图片数据不可用')
+    expect(() => monitor.writeImagePaste('invalid', 'C:\\fixture path.png', 'path')).not.toThrow()
+    expect(fakeClipText).toBe('"C:\\fixture path.png"')
   })
 })

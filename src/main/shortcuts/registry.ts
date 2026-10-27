@@ -6,12 +6,14 @@
 
 import type { BrowserWindow } from 'electron'
 import type { ShortcutCommand } from './types'
+import { resourceSequence } from '../resources/sequence'
 
 /** 构建默认命令清单；handler 里访问 mainWindow 完成实际行为。 */
 export function buildDefaultCommands(
   getWindow: () => BrowserWindow | null
 ): ShortcutCommand[] {
   return [
+    { id: 'resource.pasteNext', defaultAccelerator: 'Alt+Shift+V', label: '粘贴下一个资源字段', handler: () => { void resourceSequence.next().catch(() => {}) } },
     {
       id: 'window.toggle',
       defaultAccelerator: 'CommandOrControl+Space',

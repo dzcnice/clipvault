@@ -22,7 +22,8 @@ import {
   type UpdaterStatePayload
 } from '../../types/updater'
 import { resolveChannel } from './channel'
-import { getPrefs } from '../prefs'
+import { getPrefs, setPrefs } from '../prefs'
+import { isWorkbenchPreview } from '../app-identity'
 
 const FIRST_CHECK_DELAY_MS = 30_000
 const DEFAULT_INTERVAL_MS = 4 * 60 * 60 * 1000
@@ -77,7 +78,7 @@ export class UpdaterService {
 
     // unpackaged：electron-updater 会 Skip checkForUpdates 且不发 not-available，
     // 若先 setStatus('checking') 侧栏会永远停在「检查中…」
-    if (!appIsPackaged()) {
+    if (!appIsPackaged() || isWorkbenchPreview()) {
       logger.info('[updater] unpackaged (dev): auto-update disabled')
       this.setStatus('not-available')
       return
@@ -151,7 +152,7 @@ export class UpdaterService {
       /* ignore */
     }
     this.stop()
-    if (!appIsPackaged()) {
+    if (!appIsPackaged() || isWorkbenchPreview()) {
       this.setStatus('not-available')
       logger.info('[updater] reconfigured skipped: unpackaged')
       return
@@ -191,7 +192,7 @@ export class UpdaterService {
   }
 
   async checkForUpdates(): Promise<UpdateInfoPayload | null> {
-    if (!appIsPackaged()) {
+    if (!appIsPackaged() || isWorkbenchPreview()) {
       logger.info('[updater] skip check: unpackaged (dev)')
       this.setStatus('not-available')
       return null
@@ -225,6 +226,7 @@ export class UpdaterService {
   }
 
   async downloadUpdate(): Promise<void> {
+    if (isWorkbenchPreview()) throw new Error('独立工作台预览版使用单独安装包更新，不使用旧版 ClipVault 更新源')
     try {
       this.setStatus('downloading')
       await autoUpdater.downloadUpdate()
@@ -237,6 +239,7 @@ export class UpdaterService {
   }
 
   quitAndInstall(): void {
+    if (isWorkbenchPreview()) throw new Error('独立工作台预览版使用单独安装包更新，不使用旧版 ClipVault 更新源')
     autoUpdater.quitAndInstall(false, true)
   }
 
@@ -245,9 +248,6 @@ export class UpdaterService {
     this.applyChannelConfig(channel)
     this.reenableSource()
     try {
-      const { setPrefs } = require('../prefs') as {
-        setPrefs: (p: { updateChannel: UpdateChannel }) => void
-      }
       setPrefs({ updateChannel: channel })
     } catch {
       /* ignore */

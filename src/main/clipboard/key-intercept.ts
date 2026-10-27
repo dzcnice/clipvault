@@ -13,13 +13,14 @@ import { ipcMain } from 'electron'
 import { getClipboardMonitor } from './monitor'
 import { IPC_CHANNELS } from '../../types'
 import { logger } from '../utils/logger'
+import { onVaultLocked } from '../crypto/vault'
 
 export interface KeyInterceptPromptPayload {
   /** 唯一 promptId（用于回应配对） */
   promptId: string
   /** 命中的密钥类型（来自 key-detector） */
   detectedKeyType: string
-  /** 原始内容（敏感，渲染端只做脱敏预览） */
+  /** 仅遮罩；原文始终留在主进程。 */
   content: string
   /** 触发时的剪贴板内容类型 */
   contentType: string
@@ -33,8 +34,10 @@ export interface KeyInterceptDecision {
 /** 待回应的 prompt 集合 */
 const pending = new Map<
   string,
-  { resolve: (d: KeyInterceptDecision) => void; timer: NodeJS.Timeout }
+  { resolve: (d: KeyInterceptDecision) => void; timer: NodeJS.Timeout; content: string }
 >()
+onVaultLocked(() => { for (const entry of pending.values()) clearTimeout(entry.timer); pending.clear() })
+export function interceptedText(promptId: string): string { const entry = pending.get(promptId); if (!entry) throw new Error('密钥录入提示已过期，请重新复制'); return entry.content }
 
 let installed = false
 
@@ -57,7 +60,7 @@ export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
       const data: KeyInterceptPromptPayload = {
         promptId,
         detectedKeyType: payload.detectedKeyType,
-        content: payload.content,
+        content: '••••••••（仅保存在本机）',
         contentType: payload.type
       }
       logger.info(
@@ -76,6 +79,7 @@ export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
       }, 60_000)
 
       pending.set(promptId, {
+        content: payload.content,
         resolve: () => {
           /* renderer-driven */
         },
@@ -95,7 +99,8 @@ export function installKeyIntercept(mainWindow: BrowserWindow | null): void {
   // 渲染→主：用户决定
   ipcMain.on(
     IPC_CHANNELS.KEY_INTERCEPT_DECISION,
-    (_event, decision: KeyInterceptDecision) => {
+    (event, decision: KeyInterceptDecision) => {
+      if (!mainWindow || event.sender !== mainWindow.webContents || !decision || !['shareAsCredential', 'saveLocalOnly', 'cancel'].includes(decision.action)) return
       const entry = pending.get(decision.promptId)
       if (!entry) {
         logger.warn(`[KeyIntercept] unknown promptId ${decision.promptId}`)

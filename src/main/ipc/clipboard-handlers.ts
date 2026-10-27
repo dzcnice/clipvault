@@ -11,7 +11,11 @@ import { getClipboardMonitor, ClipboardChangeEvent } from '../clipboard/monitor'
 import { wrapHandler, wrapUnlockedHandler } from './utils'
 import { logger } from '../utils/logger'
 import { expandSnippetVariables } from '../../utils/snippet-vars'
+import { clipboardAutoClear } from '../clipboard/auto-clear'
+import { suggestForClipboard } from '../inbox/rules'
+import { getHostManager } from '../harness-host/manager'
 import { getImagePasteMode, getPrefs, setPrefs } from '../prefs'
+import { exportImagePath, cleanupImageExports } from '../storage/image-store'
 import type {
   ClipboardFilter,
   ClipboardItem,
@@ -34,7 +38,10 @@ function imageModeLabel(mode: string): string {
 
 /** 注册剪贴板相关的 IPC 处理器 */
 export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
+  cleanupImageExports()
   const monitor = getClipboardMonitor()
+  ipcMain.handle('clipboard:groups', wrapUnlockedHandler(async () => ({ success: true, data: clipboardStore.clipboardGroups() })))
+  const queries = new Map<string, AbortController>()
 
   // 启动时同步 prefs → monitor
   const initialPrefs = getPrefs()
@@ -65,6 +72,13 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
       if (item && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.CLIPBOARD_NEW_ITEM, item)
       }
+      if (item) {
+        try {
+          const inboxId = suggestForClipboard(item)
+          // L2：仅在项目显式开启时排队后台只读预分析；失败不影响复制本身。
+          if (inboxId) void getHostManager().preanalyze(inboxId).catch(() => logger.warn('[inbox] 预分析未能排队'))
+        } catch { logger.warn('[inbox] 无法为本次复制生成建议') }
+      }
 
       // 截图/图片：按用户偏好写回。落盘期间若用户又复制了别的内容，禁止覆盖。
       if (item && item.type === 'image' && item.imagePath && item.imageData) {
@@ -73,11 +87,12 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         } else {
           try {
             const mode = getImagePasteMode()
-            monitor.writeImagePaste(item.imageData, item.imagePath, mode)
+            const path = mode === 'image' ? '' : exportImagePath(item.imagePath)
+            monitor.writeImagePaste(item.imageData, path, mode)
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('clipboard:image-paste-mode', {
                 mode,
-                path: item.imagePath,
+                path,
                 label: imageModeLabel(mode)
               })
             }
@@ -95,29 +110,51 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(
     IPC_CHANNELS.CLIPBOARD_GET_HISTORY,
     wrapHandler(async (
-      _event,
+      event,
       params: {
         filter?: ClipboardFilter
         limit?: number
         offset?: number
         workspace?: WorkspaceContext
+        requestKey?: 'history-page' | 'hud'
       }
     ): Promise<ApiResponse<{ items: ClipboardItem[]; total: number }>> => {
+      const key = `${event.sender.id}:${params?.requestKey === 'hud' ? 'hud' : 'history-page'}`
+      queries.get(key)?.abort()
+      const controller = new AbortController()
+      queries.set(key, controller)
+      const abort = (): void => controller.abort()
+      event.sender.once('destroyed', abort)
       try {
-        const workspace = normalizeWorkspace(params?.workspace)
-        const result = clipboardStore.listClipboardHistory(
+        const result = await clipboardStore.searchClipboardHistory(
           params?.filter,
           params?.limit,
           params?.offset,
-          workspace
+          controller.signal
         )
         return { success: true, data: result }
       } catch (error) {
-        logger.error('[IPC] Error getting clipboard history:', error)
+        if (!controller.signal.aborted) logger.error('[IPC] Error getting clipboard history:', error)
         return { success: false, error: (error as Error).message }
+      } finally {
+        event.sender.removeListener('destroyed', abort)
+        if (queries.get(key) === controller) queries.delete(key)
       }
     })
   )
+
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_SAVE_SNAPSHOT, wrapUnlockedHandler(async (_event, id: string) => {
+    if (typeof id !== 'string' || !id) return { success: false, error: '记录 ID 无效' }
+    try {
+      return { success: true, data: clipboardStore.saveClipboardSnapshot(id) }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  }))
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_GET_OCCURRENCES, wrapUnlockedHandler(async (_event, id: string) => {
+    if (typeof id !== 'string' || !id) return { success: false, error: '记录 ID 无效' }
+    return { success: true, data: clipboardStore.getClipboardOccurrences(id) }
+  }))
 
   // 清空剪贴板历史
   ipcMain.handle(
@@ -230,13 +267,14 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
     wrapHandler(async (
       _event,
       id: string,
-      opts?: { mode?: 'both' | 'path' | 'image' }
+      opts?: { mode?: 'both' | 'path' | 'image'; paste?: boolean }
     ): Promise<ApiResponse<boolean>> => {
       try {
         const item = clipboardStore.getClipboardItemById(id)
         if (!item) {
           return { success: false, error: '记录不存在' }
         }
+        if (item.decryptError) return { success: false, error: '此条记录无法解密，原数据已保留；请从有效备份恢复' }
 
         if (item.isSnippet || item.type === 'text' || item.type === 'html') {
           let text = item.content || ''
@@ -250,6 +288,7 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
             text = expandSnippetVariables(item.content || item.preview || '', { clip })
           }
           monitor.writeText(text)
+          if ((item.detectedKeyType || item.category === 'secret' || item.category === 'credential') && getPrefs().autoClearTtlMs > 0) clipboardAutoClear.schedule(text, getPrefs().autoClearTtlMs)
         } else if (item.type === 'file') {
           monitor.writeText(item.filePath || item.content || '')
         } else if (item.type === 'image') {
@@ -258,9 +297,9 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
             if (!item.imagePath) {
               return { success: false, error: '无本地路径' }
             }
-            monitor.writeText(monitor.formatPathText(item.imagePath))
+            monitor.writeText(monitor.formatPathText(exportImagePath(item.imagePath)))
           } else if (item.imageData && item.imagePath && mode === 'both') {
-            monitor.writeImagePaste(item.imageData, item.imagePath, 'both')
+            monitor.writeImagePaste(item.imageData, exportImagePath(item.imagePath), 'both')
           } else if (item.imageData) {
             monitor.writeImage(item.imageData)
           } else {
@@ -269,6 +308,13 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
         }
 
         clipboardStore.recordClipboardUsage(id)
+        if (opts?.paste === true) {
+          const { hideHUD } = await import('../hud/manager')
+          const { pasteToActiveApp } = await import('../clipboard/paste-active')
+          hideHUD(); mainWindow.hide()
+          const result = await pasteToActiveApp()
+          if (!result.ok) { mainWindow.show(); return { success: false, error: result.error || '粘贴失败，内容已复制' } }
+        }
         return { success: true, data: true }
       } catch (error) {
         logger.error('[IPC] Error copying clipboard item:', error)
@@ -293,10 +339,10 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
             error: '该记录没有可复制的本地路径（仅截图/图片历史支持）'
           }
         }
-        // 路径原样写入文本；Windows 终端粘贴可直接给 CLI 用
-        monitor.writeText(path)
+        const exported = exportImagePath(path)
+        monitor.writeText(monitor.formatPathText(exported))
         clipboardStore.recordClipboardUsage(id)
-        return { success: true, data: path }
+        return { success: true, data: exported }
       } catch (error) {
         logger.error('[IPC] Error copying clipboard path:', error)
         return { success: false, error: (error as Error).message }

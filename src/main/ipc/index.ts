@@ -22,6 +22,8 @@ import { registerSecurityIPC } from './security-registry'
 import { registerUpdaterIPC } from './updater-registry'
 import { registerSystemHandlers } from './system-handlers'
 import { logger } from '../utils/logger'
+import { registerWorkbenchHandlers } from './workbench-handlers'
+import { registerSessionHandlers } from './session-handlers'
 
 /** 注册所有 IPC 处理器（个人本地版） */
 export function registerAllHandlers(mainWindow: BrowserWindow): void {
@@ -34,6 +36,8 @@ export function registerAllHandlers(mainWindow: BrowserWindow): void {
   registerBackupIpcHandlers()
   registerShortcutHandlers()
   registerSystemHandlers()
+  registerWorkbenchHandlers(mainWindow)
+  registerSessionHandlers(mainWindow)
 
   registerKeyInterceptIPC(mainWindow)
   registerToolsIPC(mainWindow)

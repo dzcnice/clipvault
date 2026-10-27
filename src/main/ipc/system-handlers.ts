@@ -98,6 +98,15 @@ export function registerSystemHandlers(): void {
         if (typeof partial?.maxHistorySize === 'number') {
           patch.maxHistorySize = partial.maxHistorySize
         }
+        if (typeof partial?.historyRetentionDays === 'number') {
+          patch.historyRetentionDays = partial.historyRetentionDays
+        }
+        if (typeof partial?.historyMaxSizeMb === 'number') {
+          patch.historyMaxSizeMb = partial.historyMaxSizeMb
+        }
+        if (typeof partial?.imageRetentionDays === 'number') {
+          patch.imageRetentionDays = partial.imageRetentionDays
+        }
         if (Array.isArray(partial?.excludedApps)) {
           patch.excludedApps = partial.excludedApps
         }

@@ -308,11 +308,17 @@ export function migratePasswordVaultToSafeStorage(password: string): boolean {
 }
 
 /** 锁定 vault：清空内存 DEK */
+const lockListeners = new Set<() => void>()
+export function onVaultLocked(listener: () => void): () => void {
+  lockListeners.add(listener)
+  return () => { lockListeners.delete(listener) }
+}
 export function lockVault(): void {
   if (activeDek) {
     activeDek.fill(0)
   }
   activeDek = null
+  for (const listener of lockListeners) listener()
 }
 
 /** 修改密码：旧密码正确后重新加密 DEK

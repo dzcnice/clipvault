@@ -9,6 +9,7 @@ export type ShortcutCommandId =
   | 'credential.new'
   | 'clipboard.pasteRecent'
   | 'hud.toggle'
+  | 'resource.pasteNext'
 
 /** 单个命令定义 */
 export interface ShortcutCommand {

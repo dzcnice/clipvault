@@ -129,6 +129,7 @@ export class ClipboardMonitor extends EventEmitter {
     }
 
     this.isRunning = false
+    this.generation += 1
     logger.info('[ClipboardMonitor] Stopped')
     this.emit('stopped')
   }
@@ -193,6 +194,7 @@ export class ClipboardMonitor extends EventEmitter {
     if (this.checking) return
     this.checking = true
     try {
+      const generation = this.generation
       const contentHash = this.getCurrentHash()
       const sameContent = contentHash === this.lastHash
 
@@ -205,6 +207,7 @@ export class ClipboardMonitor extends EventEmitter {
       }
 
       const sourceApp = await this.resolveSourceApp(!sameContent)
+      if (!this.isRunning || generation !== this.generation || contentHash !== this.getCurrentHash()) return
       const fingerprint = `${contentHash}\0${sourceApp}`
       if (fingerprint === this.lastFingerprint) return
 
@@ -239,8 +242,9 @@ export class ClipboardMonitor extends EventEmitter {
     if (this.excludedApps.length > 0 || this.lastWasExcluded) {
       sourceApp = (await refreshForegroundAppName()) || sourceApp
     } else if (contentChanged) {
-      void refreshForegroundAppName().then((n) => {
-        if (n) this.lastSourceApp = n
+      // 普通采集保持快速响应；Windows 前台探测可能耗时数百毫秒。
+      void refreshForegroundAppName().then((name) => {
+        if (name) this.lastSourceApp = name
       })
     }
     if (sourceApp) this.lastSourceApp = sourceApp
@@ -260,9 +264,7 @@ export class ClipboardMonitor extends EventEmitter {
       if (!image.isEmpty()) {
         const size = image.getSize()
         const bmp = image.toBitmap()
-        const head = bmp.subarray(0, Math.min(512, bmp.length))
-        const tail = bmp.subarray(Math.max(0, bmp.length - 512))
-        raw = `img:${size.width}x${size.height}:${bmp.length}:${head.toString('hex')}:${tail.toString('hex')}`
+        raw = `img:${size.width}x${size.height}:${crypto.createHash('sha256').update(bmp).digest('hex')}`
       }
     } else if (type) {
       const read = readClipboardByType(type)
@@ -325,11 +327,12 @@ export class ClipboardMonitor extends EventEmitter {
       }
       const image = clipboard.readImage()
       if (!image.isEmpty()) {
-        const size = image.toJPEG(80).length / 1024
+        const imageData = image.toDataURL()
+        const size = Buffer.byteLength(imageData.split(',')[1] ?? '', 'base64') / 1024
         if (size <= this.maxImageSize) {
           event = {
             type: ClipboardContentType.IMAGE,
-            imageData: image.toDataURL(),
+            imageData,
             sourceApp: sourceApp || undefined
           }
         } else {
@@ -401,6 +404,7 @@ export class ClipboardMonitor extends EventEmitter {
   /** 手动写入图片到剪贴板 */
   writeImage(dataUrl: string): void {
     const image = nativeImage.createFromDataURL(dataUrl)
+    if (image.isEmpty()) throw new Error('图片数据不可用')
     clipboard.writeImage(image)
     this.rememberSelfWrite()
   }
@@ -432,11 +436,7 @@ export class ClipboardMonitor extends EventEmitter {
       }
 
       const image = nativeImage.createFromDataURL(dataUrl)
-      if (image.isEmpty()) {
-        if (mode !== 'image') clipboard.writeText(pathText)
-        this.rememberSelfWrite()
-        return
-      }
+      if (image.isEmpty()) throw new Error('图片数据不可用')
 
       if (mode === 'image') {
         clipboard.writeImage(image)
@@ -450,15 +450,8 @@ export class ClipboardMonitor extends EventEmitter {
       this.rememberSelfWrite()
       logger.info(`[ClipboardMonitor] image+path on clipboard: ${pathText}`)
     } catch (err) {
-      logger.warn('[ClipboardMonitor] writeImagePaste failed, fallback text:', err)
-      try {
-        if (mode !== 'image') {
-          clipboard.writeText(pathText)
-          this.rememberSelfWrite()
-        }
-      } catch {
-        /* ignore */
-      }
+      logger.warn('[ClipboardMonitor] writeImagePaste failed')
+      throw err
     }
   }
 

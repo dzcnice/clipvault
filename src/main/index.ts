@@ -16,18 +16,22 @@ import { ensureVaultOpen } from './crypto/vault'
 import { IPC_CHANNELS } from '../types'
 import { logger } from './utils/logger'
 import { safeOpenExternal } from './security/open-external'
+import { stopWorkbench } from './workbench/service'
+import { isWorkbenchPreview, configureWorkbenchProfile } from './app-identity'
 import {
   registerTrustedWebContents,
   unregisterTrustedWebContents,
   wrapHandler
 } from './ipc/utils'
 
+configureWorkbenchProfile()
+
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 
 // 开机自启配置
 const autoLauncher = new AutoLaunch({
-  name: 'ClipVault',
+  name: isWorkbenchPreview() ? 'ClipVault Workbench Preview' : 'ClipVault',
   isHidden: true // 启动时隐藏窗口
 })
 
@@ -42,7 +46,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     icon: join(__dirname, '../../resources/icon-v3.png'),
     frame: false, // 无边框窗口
-    transparent: true, // 启用透明以配合液态玻璃效果
+    // Windows 的透明窗口不能可靠缩放；保留无边框样式并允许工作台调整大小。
+    transparent: process.platform !== 'win32',
+    resizable: true,
     hasShadow: true, // macOS 窗口阴影（Windows 下 CSS 提供）
     roundedCorners: true, // macOS 原生圆角（Windows 无效，用 CSS border-radius）
     webPreferences: {
@@ -77,9 +83,11 @@ function createWindow(): void {
   })
 
   // v2.1 G3-3：把主窗口 webContents 加入 IPC sender 白名单
-  registerTrustedWebContents(mainWindow.webContents.id)
+  const mainWebContentsId = mainWindow.webContents.id
+  registerTrustedWebContents(mainWebContentsId)
   mainWindow.on('closed', () => {
-    if (mainWindow) unregisterTrustedWebContents(mainWindow.webContents.id)
+    unregisterTrustedWebContents(mainWebContentsId)
+    mainWindow = null
   })
 
   // σ2 · P2-7：主进程窗口状态 → 渲染端 TitleBar
@@ -197,7 +205,7 @@ function registerWindowHandlers(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.clipvault')
+  electronApp.setAppUserModelId(isWorkbenchPreview() ? 'com.clipvault.workbench.preview' : 'com.clipvault')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -275,9 +283,11 @@ app.on('before-quit', async (event) => {
   destroyTray()
   unregisterAllShortcuts()
   stopAutoBackup()
+  await stopWorkbench()
   closeDatabase()
   logger.info('[App] Cleanup completed')
-  app.exit(0)
+  // 正常退出会刷新 Chromium 的系统安全存储状态；直接 exit 会绕过这一步。
+  app.quit()
 })
 
 // In this file you can include the rest of your app's specific main process

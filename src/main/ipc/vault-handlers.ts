@@ -11,6 +11,9 @@ import * as osCrypto from '../crypto'
 import { wrapHandler } from './utils'
 import { logger } from '../utils/logger'
 import { backfillClipboardEncryption } from '../../db/clipboard-store'
+import { suspendWorkbench } from '../workbench/service'
+import { backfillClipCategories } from '../clipboard/classify-backfill'
+import { startInboxMaintenance, refreshLocalSuggestions } from '../inbox/maintenance'
 
 /**
  * C1 · vault 解锁成功后触发剪贴板明文 → 密文回填（幂等）
@@ -33,12 +36,14 @@ function triggerClipboardBackfill(): void {
     }
   }
   void backfillClipboardEncryption(onProgress)
-    .then((r) => {
+    .then(async (r) => {
       if (r.scanned > 0) {
         logger.info(
           `[Backfill] clipboard encryption: scanned=${r.scanned} migrated=${r.migrated} skipped=${r.skipped}`
         )
       }
+      await backfillClipCategories()
+      startInboxMaintenance(); refreshLocalSuggestions()
     })
     .catch((err) => {
       logger.error('[Backfill] clipboard encryption failed:', err)
@@ -159,6 +164,7 @@ export function registerVaultHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(
     IPC_CHANNELS.VAULT_LOCK,
     wrapHandler(async (): Promise<ApiResponse<boolean>> => {
+      await suspendWorkbench()
       vault.lockVault()
       // 通知渲染端回到锁屏
       if (!mainWindow.isDestroyed()) {

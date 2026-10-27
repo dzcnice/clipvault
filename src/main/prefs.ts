@@ -5,7 +5,8 @@
 
 import { app } from 'electron'
 import { join, isAbsolute, normalize } from 'path'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'fs'
+import { randomUUID } from 'node:crypto'
 import { logger } from './utils/logger'
 
 /** 截图入库后如何写回系统剪贴板 */
@@ -32,6 +33,12 @@ export interface ClipVaultPrefs {
   // ── 剪贴板可控（A1–A5 / A8）──
   /** 非置顶历史条数上限 */
   maxHistorySize: number
+  /** 普通历史保留天数；0 不按天清理 */
+  historyRetentionDays: number
+  /** 临时历史总内容大小上限 MB；0 不按空间清理 */
+  historyMaxSizeMb: number
+  /** 普通图片保留天数；0 不按天清理 */
+  imageRetentionDays: number
   /** 不记录的应用进程名（不含路径） */
   excludedApps: string[]
   /** 是否启用系统剪贴板监听 */
@@ -58,6 +65,7 @@ export interface ClipVaultPrefs {
   biometricOnCopy: boolean
   /** 导出时要求生物识别确认 */
   biometricOnExport: boolean
+  allowResourceUsernameAI: boolean
 }
 
 const DEFAULTS: ClipVaultPrefs = {
@@ -68,6 +76,9 @@ const DEFAULTS: ClipVaultPrefs = {
   minClipboardLength: 0,
   onboardingTipsSeen: false,
   maxHistorySize: 500,
+  historyRetentionDays: 0,
+  historyMaxSizeMb: 0,
+  imageRetentionDays: 30,
   excludedApps: [],
   clipboardMonitorEnabled: true,
   saveImages: true,
@@ -78,7 +89,8 @@ const DEFAULTS: ClipVaultPrefs = {
   updateChannel: 'stable',
   maskSecretsByDefault: true,
   biometricOnCopy: false,
-  biometricOnExport: false
+  biometricOnExport: false,
+  allowResourceUsernameAI: false
 }
 
 function prefsPath(): string {
@@ -125,6 +137,12 @@ function clampHistory(raw: unknown): number {
   return Math.max(50, Math.min(Math.floor(raw), 5000))
 }
 
+function clampRetention(raw: unknown, fallback: number, maximum: number): number {
+  return typeof raw === 'number' && Number.isFinite(raw)
+    ? Math.max(0, Math.min(Math.floor(raw), maximum))
+    : fallback
+}
+
 function clampImageKb(raw: unknown): number {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULTS.maxImageSizeKb
   return Math.max(100, Math.min(Math.floor(raw), 50_000))
@@ -167,6 +185,9 @@ function normalizePrefs(raw: unknown): ClipVaultPrefs {
     minClipboardLength: clampMinLen(obj.minClipboardLength),
     onboardingTipsSeen: obj.onboardingTipsSeen === true,
     maxHistorySize: clampHistory(obj.maxHistorySize),
+    historyRetentionDays: clampRetention(obj.historyRetentionDays, 0, 3650),
+    historyMaxSizeMb: clampRetention(obj.historyMaxSizeMb, 0, 102400),
+    imageRetentionDays: clampRetention(obj.imageRetentionDays, 30, 3650),
     excludedApps: normalizeExcluded(obj.excludedApps),
     clipboardMonitorEnabled: obj.clipboardMonitorEnabled !== false,
     saveImages: obj.saveImages !== false,
@@ -177,7 +198,8 @@ function normalizePrefs(raw: unknown): ClipVaultPrefs {
     updateChannel: ch === 'beta' ? 'beta' : 'stable',
     maskSecretsByDefault: obj.maskSecretsByDefault !== false,
     biometricOnCopy: obj.biometricOnCopy === true,
-    biometricOnExport: obj.biometricOnExport === true
+    biometricOnExport: obj.biometricOnExport === true,
+    allowResourceUsernameAI: obj.allowResourceUsernameAI === true
   }
 }
 
@@ -211,14 +233,18 @@ export function setPrefs(partial: Partial<ClipVaultPrefs>): ClipVaultPrefs {
     merged.excludedApps = normalizeExcluded(partial.excludedApps)
   }
   const next = normalizePrefs(merged)
-  cache = next
+  const temporary = `${prefsPath()}.${randomUUID()}.tmp`
   try {
     const dir = app.getPath('userData')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeFileSync(prefsPath(), JSON.stringify(next, null, 2), 'utf8')
+    writeFileSync(temporary, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 })
+    renameSync(temporary, prefsPath())
   } catch (err) {
+    try { if (existsSync(temporary)) unlinkSync(temporary) } catch { /* 仅清理本次临时文件 */ }
     logger.warn('[prefs] write failed:', err)
+    throw new Error('保存偏好失败，请检查数据目录是否可写')
   }
+  cache = next
   return next
 }
 

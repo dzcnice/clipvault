@@ -11,12 +11,13 @@ import {
   readFileSync,
   unlinkSync,
   existsSync,
-  copyFileSync
+  copyFileSync, lstatSync, readdirSync
 } from 'fs'
-import { join, basename } from 'path'
+import { join, basename, extname } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { resolveImagesDir, getDefaultImagesDir } from '../prefs'
 import { logger } from '../utils/logger'
+import { encodeImage, decodeImage, MAX_IMAGE_BYTES, type ImageBytes } from './image-codec'
 
 function ensureImagesDir(): string {
   const dir = resolveImagesDir()
@@ -62,12 +63,14 @@ function mimeToExt(mime: string): string {
 }
 
 /** sharp 是 native module；动态加载失败时走 no-op 压缩路径 */
-let sharpMod: typeof import('sharp') | null | undefined
-function loadSharp(): typeof import('sharp') | null {
+type SharpFactory = typeof import('sharp')['default']
+let sharpMod: SharpFactory | null | undefined
+function loadSharp(): SharpFactory | null {
   if (sharpMod !== undefined) return sharpMod
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    sharpMod = require('sharp') as typeof import('sharp')
+    const loaded = require('sharp') as SharpFactory | { default: SharpFactory }
+    sharpMod = typeof loaded === 'function' ? loaded : loaded.default
   } catch {
     sharpMod = null
   }
@@ -76,48 +79,28 @@ function loadSharp(): typeof import('sharp') | null {
 
 /**
  * 保存图片 Data URL 到磁盘，返回绝对路径
- * 若 sharp 可用，对 > 1024 边的图片做缩放 + 质量 80 压缩
+ * 原始字节保留，缩略图由 loadThumbnailAsDataUrl 单独生成。
  */
 export async function saveImageDataUrl(dataUrl: string): Promise<string | null> {
   const parsed = parseDataUrl(dataUrl)
   if (!parsed) return null
 
   const dir = ensureImagesDir()
-  const ext = mimeToExt(parsed.mime)
-  const filename = `${uuidv4()}.${ext}`
+  if (parsed.base64.length > MAX_IMAGE_BYTES * 1.4) throw new Error('图片超过 32 MB 上限')
+  const filename = `${uuidv4()}.cvimg`
   const outPath = join(dir, filename)
 
   const raw = Buffer.from(parsed.base64, 'base64')
-  const sharp = loadSharp()
-
-  if (sharp) {
-    try {
-      const img = sharp(raw)
-      const metadata = await img.metadata()
-      const needResize =
-        (metadata.width && metadata.width > 1024) ||
-        (metadata.height && metadata.height > 1024)
-      let pipe = img
-      if (needResize) {
-        pipe = pipe.resize({ width: 1024, height: 1024, fit: 'inside' })
-      }
-      let buffer: Buffer
-      if (ext === 'jpg') {
-        buffer = await pipe.jpeg({ quality: 80 }).toBuffer()
-      } else if (ext === 'webp') {
-        buffer = await pipe.webp({ quality: 80 }).toBuffer()
-      } else {
-        buffer = await pipe.png({ compressionLevel: 9 }).toBuffer()
-      }
-      writeFileSync(outPath, buffer, { mode: 0o600 })
-      return outPath
-    } catch {
-      // sharp 处理失败则降级为直接写原始字节
-    }
-  }
-
-  writeFileSync(outPath, raw, { mode: 0o600 })
+  writeFileSync(outPath, encodeImage({ mime: parsed.mime, bytes: raw }), { flag: 'wx', mode: 0o600 })
   return outPath
+}
+
+/** 快照拥有自己的文件，原历史的清理不影响长期副本。 */
+export function copyImageFile(source: string): string {
+  if (!existsSync(source)) throw new Error('原图片已不存在，无法长期保存')
+  const destination = join(ensureImagesDir(), `${uuidv4()}.cvimg`)
+  writeFileSync(destination, encodeImage(readImageBytes(source)), { flag: 'wx', mode: 0o600 })
+  return destination
 }
 
 /** 列表用缩略图（小 JPEG）；失败返回 null */
@@ -129,7 +112,7 @@ export async function loadThumbnailAsDataUrl(
   try {
     const sharp = loadSharp()
     if (sharp) {
-      const buffer = await sharp(filePath)
+      const buffer = await sharp(readImageBytes(filePath).bytes)
         .resize({ width: maxEdge, height: maxEdge, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 55 })
         .toBuffer()
@@ -145,15 +128,38 @@ export async function loadThumbnailAsDataUrl(
 export function loadImageAsDataUrl(filePath: string): string | null {
   if (!filePath || !existsSync(filePath)) return null
   try {
-    const buf = readFileSync(filePath)
-    const lower = filePath.toLowerCase()
-    let mime = 'image/png'
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mime = 'image/jpeg'
-    else if (lower.endsWith('.webp')) mime = 'image/webp'
-    else if (lower.endsWith('.gif')) mime = 'image/gif'
-    return `data:${mime};base64,${buf.toString('base64')}`
+    const { bytes, mime } = readImageBytes(filePath)
+    return `data:${mime};base64,${bytes.toString('base64')}`
   } catch {
     return null
+  }
+}
+
+export function readImageBytes(filePath: string): ImageBytes {
+  const info = lstatSync(filePath)
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_IMAGE_BYTES + 128) throw new Error('图片不是普通文件或超过大小上限')
+  return decodeImage(readFileSync(filePath), extname(filePath).toLowerCase())
+}
+
+/** 只有用户选择复制路径时才产生明文；十分钟后及下次启动时回收本应用导出文件。 */
+export function exportImagePath(filePath: string): string {
+  const image = readImageBytes(filePath), root = join(getDefaultImagesDir(), 'temporary-exports')
+  mkdirSync(root, { recursive: true, mode: 0o700 })
+  cleanupImageExports()
+  const destination = join(root, `cv-export-${uuidv4()}.${mimeToExt(image.mime)}`)
+  writeFileSync(destination, image.bytes, { flag: 'wx', mode: 0o600 })
+  const timer = setTimeout(() => { try { unlinkSync(destination) } catch { /* 使用中的文件留待下次清理 */ } }, 10 * 60_000)
+  timer.unref()
+  return destination
+}
+
+export function cleanupImageExports(): void {
+  const root = join(getDefaultImagesDir(), 'temporary-exports')
+  if (!existsSync(root)) return
+  for (const name of readdirSync(root)) {
+    if (!/^cv-export-[0-9a-f-]{36}\.(png|jpg|webp|gif)$/.test(name)) continue
+    const path = join(root, name)
+    try { const info = lstatSync(path); if (info.isFile() && !info.isSymbolicLink() && Date.now() - info.mtimeMs >= 10 * 60_000) unlinkSync(path) } catch { /* 不影响历史读取 */ }
   }
 }
 

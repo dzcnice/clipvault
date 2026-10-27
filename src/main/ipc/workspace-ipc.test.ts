@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 interface FakeHandler {
   (event: unknown, ...args: unknown[]): Promise<unknown>
@@ -34,7 +35,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../crypto/vault', () => ({
+  onVaultLocked: vi.fn(),
   isUnlocked: () => true
+}))
+
+vi.mock('../storage/image-store', () => ({
+  cleanupImageExports: vi.fn(),
+  exportImagePath: (path: string) => path
 }))
 
 vi.mock('../utils/logger', () => ({
@@ -90,13 +97,13 @@ const getSnippetsSpy = vi.fn()
 const createSnippetSpy = vi.fn()
 vi.mock('../../db/clipboard-store', () => ({
   addClipboardItem: vi.fn(async () => null),
-  listClipboardHistory: (
+  searchClipboardHistory: (
     filter: unknown,
     limit: unknown,
     offset: unknown,
-    workspace: unknown
+    signal: unknown
   ) => {
-    listHistorySpy(filter, limit, offset, workspace)
+    listHistorySpy(filter, limit, offset, signal)
     return { items: [], total: 0 }
   },
   getSnippets: (workspace: unknown) => {
@@ -146,7 +153,7 @@ vi.mock('../clipboard/auto-clear', () => ({
   clipboardAutoClear: { schedule: vi.fn() }
 }))
 
-const fakeEvent = { senderFrame: { url: 'file:///fake' } } as unknown
+const fakeEvent = { senderFrame: { url: 'file:///fake' }, sender: Object.assign(new EventEmitter(), { id: 1 }) } as unknown
 
 describe('workspace IPC · personal-only', () => {
   beforeEach(async () => {
@@ -182,7 +189,8 @@ describe('workspace IPC · personal-only', () => {
   it('clipboard:getHistory 强制 personal（忽略 team 入参）', async () => {
     const handler = handlers.get('clipboard:getHistory')!
     await handler(fakeEvent, { workspace: 'team', limit: 5 })
-    expect(listHistorySpy).toHaveBeenCalledWith(undefined, 5, undefined, 'personal')
+    // 新查询接口没有 workspace 入参，内部固定 personal。
+    expect(listHistorySpy).toHaveBeenCalledWith(undefined, 5, undefined, expect.any(AbortSignal))
   })
 
   it('clipboard:getSnippets 强制 personal', async () => {

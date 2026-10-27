@@ -31,7 +31,7 @@ export function createHUDWindow(): BrowserWindow {
   }
 
   const { width: screenW } = screen.getPrimaryDisplay().workAreaSize
-  const width = 640
+  const width = 520
   const height = 480
 
   hudWindow = new BrowserWindow({

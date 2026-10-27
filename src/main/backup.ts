@@ -3,14 +3,17 @@
  */
 
 import { app, BrowserWindow } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync, readdirSync, unlinkSync, copyFileSync, statSync } from 'fs'
+import { join, resolve, dirname, basename } from 'path'
+import { existsSync, mkdirSync, readdirSync, unlinkSync, copyFileSync, statSync, renameSync } from 'fs'
 import { showBackupNotification } from './notification'
-import { closeDatabase, initDatabase } from '../db/connection'
+import { closeDatabase, initDatabase, getDatabase } from '../db/connection'
+import { randomUUID } from 'node:crypto'
+import { workbenchBusy } from './workbench/service'
 import { backfillClipboardEncryption } from '../db/clipboard-store'
 import * as vault from './crypto/vault'
 import { IPC_CHANNELS } from '../types'
 import { logger } from './utils/logger'
+import { addBackupAssets, prepareBackupRestore } from './backup-assets'
 
 const BACKUP_DIR_NAME = 'backups'
 const MAX_BACKUP_DAYS = 7
@@ -53,14 +56,17 @@ function generateBackupFileName(): string {
   const now = new Date()
   const dateStr = now.toISOString().split('T')[0] ?? '' // YYYY-MM-DD
   const timeStr = (now.toTimeString().split(' ')[0] ?? '').replace(/:/g, '-') // HH-MM-SS
-  return `clipvault-backup-${dateStr}_${timeStr}.db`
+  return `clipvault-backup-${dateStr}_${timeStr}-${randomUUID().slice(0, 8)}.db`
 }
 
 /**
  * 执行备份
  */
-export function performBackup(): { success: boolean; message: string; filePath?: string } {
+export function performBackup(portablePassword?: string): { success: boolean; message: string; filePath?: string } {
+  let createdPath: string | undefined
   try {
+    if (workbenchBusy()) throw new Error('请先停止工作台任务，确保会话归档后再备份')
+    if (!vault.isUnlocked()) throw new Error('请先解锁资料库，再创建包含图片的加密备份')
     const dbPath = getDbPath()
 
     // 检查数据库文件是否存在
@@ -72,6 +78,7 @@ export function performBackup(): { success: boolean; message: string; filePath?:
     const backupDir = getBackupDir()
     const backupFileName = generateBackupFileName()
     const backupPath = join(backupDir, backupFileName)
+    createdPath = backupPath
 
     // C1 · 备份前强制触发剪贴板明文 → 密文回填，确保物理副本不含明文。
     // 仅在 vault 已解锁时执行；未解锁则跳过（用户尚未解锁过的库本就无新增明文，
@@ -93,8 +100,9 @@ export function performBackup(): { success: boolean; message: string; filePath?:
       }
     }
 
-    // 复制数据库文件
-    copyFileSync(dbPath, backupPath)
+    // 包含 WAL 中已提交的数据；不能直接复制正在使用的主文件。
+    getDatabase().prepare('VACUUM INTO ?').run(backupPath)
+    const assets = addBackupAssets(backupPath, portablePassword)
 
     logger.info(
       `[Backup] Created backup: ${backupPath} (备份文件包含加密数据库；遗忘主密码将无法恢复)`
@@ -105,10 +113,11 @@ export function performBackup(): { success: boolean; message: string; filePath?:
 
     return {
       success: true,
-      message: '备份成功',
+      message: `备份成功，包含 ${assets.images} 张加密图片${assets.missing ? `；${assets.missing} 张原图在备份前已缺失` : ''}`,
       filePath: backupPath
     }
   } catch (error) {
+    if (createdPath && existsSync(createdPath)) { try { unlinkSync(createdPath) } catch { /* 不把不完整副本当成功备份 */ } }
     const errorMessage = error instanceof Error ? error.message : '未知错误'
     logger.error('[Backup] Backup failed:', error)
     return { success: false, message: errorMessage }
@@ -191,25 +200,30 @@ export function listBackups(): Array<{ name: string; path: string; size: number;
  * 3. 重新打开连接（触发 initSchema 的兼容迁移）
  * 4. 锁定 vault 并通知渲染端回到解锁页（恢复后的 DEK 必须重新派生）
  */
-export function restoreFromBackup(backupPath: string): { success: boolean; message: string } {
+export function restoreFromBackup(backupPath: string, password?: string, selectedExternal = false): { success: boolean; message: string } {
+  const prepared = join(app.getPath('userData'), `.restore-${randomUUID()}.db`)
+  const rollback = join(app.getPath('userData'), `.before-restore-${randomUUID()}.db`)
+  let switched = false, stagedImages: string[] = []
   try {
+    if (workbenchBusy()) return { success: false, message: '请先停止工作台任务，再恢复数据库' }
+    if (!selectedExternal) assertLocalBackup(backupPath)
     if (!existsSync(backupPath)) {
       return { success: false, message: '备份文件不存在' }
     }
 
     const dbPath = getDbPath()
-
-    // 先备份当前数据库（失败不阻塞，仅告警）
+    copyFileSync(backupPath, prepared)
+    const assets = prepareBackupRestore(prepared, join(app.getPath('userData'), 'images'), password)
+    stagedImages = assets.created
+    // 先校验备份和附件，再保护当前数据；任何失败都不能覆盖活动库。
     const currentBackup = performBackup()
-    if (!currentBackup.success) {
-      logger.warn('[Backup] Warning: Could not backup current database before restore')
-    }
+    if (!currentBackup.success) throw new Error(`恢复已停止：当前数据备份失败（${currentBackup.message}）`)
 
     // 1) 断开现有连接
     closeDatabase()
-
-    // 2) 覆盖 db 文件
-    copyFileSync(backupPath, dbPath)
+    renameSync(dbPath, rollback)
+    switched = true
+    renameSync(prepared, dbPath)
 
     // 3) 重新打开（initDatabase 内部会调 initSchema 完成迁移）
     initDatabase()
@@ -223,12 +237,24 @@ export function restoreFromBackup(backupPath: string): { success: boolean; messa
     }
 
     logger.info(`[Backup] Restored from: ${backupPath}`)
-    return { success: true, message: '恢复成功，请重新解锁' }
+    stagedImages = []
+    return { success: true, message: `恢复成功，请重新解锁${assets.missing ? `；备份中标记缺失的 ${assets.missing} 张图片无法恢复` : ''}` }
   } catch (error) {
+    if (switched) {
+      try { closeDatabase(); if (existsSync(getDbPath())) unlinkSync(getDbPath()); renameSync(rollback, getDbPath()); initDatabase() }
+      catch { return { success: false, message: `恢复失败，原库完整保留在 ${rollback}，请关闭应用后恢复` } }
+    }
     const errorMessage = error instanceof Error ? error.message : '未知错误'
     logger.error('[Backup] Restore failed:', error)
     return { success: false, message: errorMessage }
+  } finally {
+    if (existsSync(prepared)) { try { unlinkSync(prepared) } catch { /* 保留失败现场 */ } }
+    for (const path of stagedImages) { try { unlinkSync(path) } catch { /* 仅清理本次创建的图片 */ } }
   }
+}
+
+function assertLocalBackup(path: string): void {
+  if (dirname(resolve(path)) !== resolve(getBackupDir()) || !/^clipvault-backup-.+\.db$/.test(basename(path))) throw new Error('只能操作备份列表中的文件；外部备份请通过导入入口选择')
 }
 
 /**
@@ -236,6 +262,7 @@ export function restoreFromBackup(backupPath: string): { success: boolean; messa
  */
 export function deleteBackup(backupPath: string): { success: boolean; message: string } {
   try {
+    assertLocalBackup(backupPath)
     if (!existsSync(backupPath)) {
       return { success: false, message: '备份文件不存在' }
     }
