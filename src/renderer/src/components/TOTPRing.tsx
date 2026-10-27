@@ -9,6 +9,7 @@ import { useTOTP } from '../hooks/useTOTP'
 
 export interface TOTPRingProps {
   credentialId: string
+  resource?: boolean
   size?: number
   strokeWidth?: number
   className?: string
@@ -16,11 +17,12 @@ export interface TOTPRingProps {
 
 export const TOTPRing: React.FC<TOTPRingProps> = ({
   credentialId,
+  resource = false,
   size = 96,
   strokeWidth = 6,
   className
 }) => {
-  const { code, remainingMs, periodMs, error } = useTOTP(credentialId)
+  const { code, remainingMs, periodMs, error } = useTOTP(credentialId, resource)
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const ratio = periodMs > 0 ? remainingMs / periodMs : 0
@@ -70,8 +72,9 @@ export const TOTPRing: React.FC<TOTPRingProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontWeight: 600,
+            fontFamily: 'var(--font-mono)',
+            fontVariantNumeric: 'tabular-nums',
+            fontWeight: 500,
             fontSize: size / (code.length > 6 ? 5 : 4),
             letterSpacing: 1
           }}
@@ -82,8 +85,9 @@ export const TOTPRing: React.FC<TOTPRingProps> = ({
       </div>
       <div
         style={{
-          fontSize: 12,
-          color: lowTime ? '#ef4444' : 'inherit'
+          fontSize: 11.5,
+          fontFamily: 'var(--font-mono)',
+          color: lowTime ? 'var(--state-failed)' : 'var(--text-3)'
         }}
       >
         {error ? `错误：${error}` : `${Math.ceil(remainingMs / 1000)}s`}

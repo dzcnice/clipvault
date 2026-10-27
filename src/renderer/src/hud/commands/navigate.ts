@@ -38,6 +38,9 @@ function nav(path: string): () => Promise<void> {
 
 export function buildNavigateCommands(): HudCommand[] {
   return [
+    { id: 'nav.workbench', title: '打开工作台', subtitle: '任务与结果', category: 'navigate', keywords: ['工作台', '任务', 'AI', 'harness'], Icon: LayoutDashboard, perform: nav('/workbench') },
+    { id: 'nav.projects', title: '打开项目', subtitle: '目录与环境', category: 'navigate', keywords: ['项目', 'project'], Icon: LayoutDashboard, perform: nav('/projects') },
+    { id: 'nav.resources', title: '打开资源库', subtitle: '账号与密钥', category: 'navigate', keywords: ['资源', '密码', '账号', '密钥'], Icon: KeyRound, perform: nav('/resources') },
     {
       id: 'nav.dashboard',
       title: '打开概览',

@@ -20,6 +20,7 @@ export interface HudCommand {
   keywords?: string[]
   Icon?: LucideIcon
   shortcut?: string
+  actions?: HudCommand[]
   perform: () => void | Promise<void>
 }
 
@@ -27,5 +28,5 @@ export interface HudCommand {
 export interface HudCommandSource {
   id: string
   label: string
-  list: () => HudCommand[] | Promise<HudCommand[]>
+  list: (query?: string) => HudCommand[] | Promise<HudCommand[]>
 }

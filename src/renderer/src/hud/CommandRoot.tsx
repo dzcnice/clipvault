@@ -9,6 +9,7 @@ import type { HudCommand } from './types'
 import { CommandInput } from './CommandInput'
 import { CommandList } from './CommandList'
 import { useHudKeyboardNav } from './useKeyboardNav'
+import { buildMixedDataCommands } from './commands/mixed-data'
 
 interface HudAPILike {
   hide: () => Promise<{ success: boolean }>
@@ -23,20 +24,45 @@ function getApi(): HudAPILike | null {
 
 export function CommandRoot(): JSX.Element {
   const [value, setValue] = useState('')
+  const [aiHint, setAiHint] = useState(''), [aiRequest, setAiRequest] = useState(0)
   const [commands, setCommands] = useState<HudCommand[]>([])
+  const [actions, setActions] = useState<HudCommand[]>()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [revision, setRevision] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const selecting = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useHudKeyboardNav(true)
+  useEffect(() => { inputRef.current?.focus() }, [actions])
+  useEffect(() => {
+    let alive = true; setAiHint('')
+    if (!value.trim() || (!aiRequest && !(value.length > 6 && /\s/.test(value))) || !window.api?.workbench?.recall) return
+    const timer = setTimeout(() => { void window.api.workbench.recall(value).then(async result => { if (!alive || !result.success || !result.data?.usedAI) return; const commands = await buildMixedDataCommands(value, result.data.filter); if (alive) { setCommands(commands); setAiHint('AI 理解为：' + result.data.labels.map(item => item.text).join(' · ') + '；未发送历史内容') } }).catch(() => {}) }, 650)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [value, revision, aiRequest])
 
   useEffect(() => {
     let cancelled = false
-    void loadAllCommands().then((list) => {
-      if (!cancelled) setCommands(list)
-    })
+    setLoading(true)
+    setError(null)
+    setCommands([])
+    const timer = setTimeout(() => {
+      void loadAllCommands(value.trim()).then((list) => {
+        if (!cancelled) setCommands(list)
+      }).catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : '搜索失败')
+      }).finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    }, value.trim() ? 120 : 0)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
-  }, [])
+  }, [value, revision])
 
   useEffect(() => {
     const api = getApi()
@@ -45,7 +71,9 @@ export function CommandRoot(): JSX.Element {
       return
     }
     const offShown = api.onShown(() => {
+      setActions(undefined)
       setValue('')
+      setRevision((v) => v + 1)
       requestAnimationFrame(() => inputRef.current?.focus())
     })
     inputRef.current?.focus()
@@ -55,33 +83,56 @@ export function CommandRoot(): JSX.Element {
   }, [])
 
   const handleSelect = async (cmd: HudCommand): Promise<void> => {
+    if (cmd.actions) { setActions(cmd.actions); return }
+    if (selecting.current || loading) return
+    selecting.current = true
+    setBusy(true)
+    setError(null)
     try {
       await cmd.perform()
-    } finally {
       const api = getApi()
       if (api) await api.hide()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '操作失败，请重试')
+    } finally {
+      selecting.current = false
+      setBusy(false)
     }
   }
 
   return (
     <div
-      className="mx-auto mt-10 w-[620px] animate-fadeIn overflow-hidden"
-      style={{
-        background: 'var(--surface)',
-        border: '3px solid var(--line)',
-        boxShadow: 'var(--px-shadow)',
-        color: 'var(--ink)'
+      ref={rootRef}
+      onKeyDownCapture={event => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); event.stopPropagation(); setAiRequest(number => number + 1) }
+        if (event.key === 'Tab' && !event.shiftKey && !actions) {
+          const selected = rootRef.current?.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]')?.dataset.commandId || rootRef.current?.querySelector<HTMLElement>('[cmdk-item]')?.dataset.commandId
+          const match = selected?.match(/^(clip|snip|resource):([^:]+)$/)
+          if (match) { event.preventDefault(); event.stopPropagation(); void window.api.hud.navigate(`/sessions?${match[1] === 'resource' ? 'resource' : 'clipboard'}=${encodeURIComponent(match[2]!)}`) }
+        }
       }}
+      onKeyDown={event => {
+        if (!event.ctrlKey && !event.altKey && !event.metaKey && /^[1-9]$/.test(event.key) && (!value || event.target !== inputRef.current)) {
+          const rows = rootRef.current?.querySelectorAll<HTMLElement>('[cmdk-item]:not([hidden])')
+          const id = rows?.[Number(event.key) - 1]?.dataset.commandId
+          const command = (actions ?? commands).find(item => item.id === id)
+          if (command) { event.preventDefault(); event.stopPropagation(); void handleSelect(command) }
+        }
+        if (event.key === 'ArrowLeft' && actions) { event.preventDefault(); setActions(undefined) }
+        if (event.key === 'ArrowRight' && !actions) { const id = rootRef.current?.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]')?.dataset.commandId; const command = commands.find(item => item.id === id); if (command?.actions) { event.preventDefault(); setActions(command.actions) } }
+      }}
+      className="cv-pop mx-auto mt-1 w-[520px] max-w-full overflow-hidden rounded-[16px] bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow-lg)]"
     >
-      <Command shouldFilter={true} label="ClipVault Command Palette" className="flex flex-col">
-        <CommandInput ref={inputRef} value={value} onValueChange={setValue} />
-        <CommandList commands={commands} onSelect={handleSelect} />
-        <div
-          className="flex items-center justify-between border-t-2 border-[var(--line)] px-3 py-2 font-mono text-[10px] text-muted-foreground"
-          style={{ background: 'var(--surface-2)' }}
-        >
-          <span>↑↓ 选择 · Enter · Esc</span>
-          <span className="font-mono-num">{commands.length}</span>
+      <Command key={actions ? 'actions' : 'search'} shouldFilter={false} label="ClipVault Command Palette" className="flex flex-col">
+        {actions && <button className="cv-btn cv-btn-ghost mx-2 mt-2 w-fit !h-7 text-xs" onClick={() => setActions(undefined)}>← 返回搜索</button>}
+        <CommandInput ref={inputRef} value={actions ? '' : value} onValueChange={actions ? () => {} : setValue} placeholder={actions ? '选择取用方式' : undefined} />
+        {error ? <p role="alert" className="mx-3 mt-2 rounded-[9px] bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--destructive)]">{error}</p> : null}
+        {aiHint && <p className="mx-3 mt-2 rounded-[9px] bg-[var(--primary-soft)] px-3 py-2 text-xs text-[var(--blue)]">{aiHint}</p>}
+        {loading || busy ? <p role="status" className="cv-shimmer px-4 pt-2.5 text-xs">{busy ? '正在复制…' : '搜索全部记录…'}</p> : null}
+        <CommandList commands={actions ?? commands} onSelect={handleSelect} pending={loading || Boolean(error)} />
+        <div className="flex items-center gap-3 border-t border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-[11.5px] text-[var(--ink-faint)]">
+          {([['↵', '粘贴'], ['1–9', '直接选'], ['Tab', '问 AI'], ['→', '更多'], ['Esc', '关闭']] as const).map(([key, label]) => <span key={label} className="flex items-center gap-1.5"><kbd className="cv-kbd">{key}</kbd>{label}</span>)}
+          <span className="ml-auto font-mono">{commands.length}</span>
         </div>
       </Command>
     </div>

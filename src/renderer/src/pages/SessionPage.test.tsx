@@ -1,0 +1,100 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import SessionPage from './SessionPage'
+
+const session = { id: 'session-fixture', title: '合成会话', projectId: 'project-fixture', directory: '/fixture', state: 'idle', permission: 'confirm', createdAt: 1, updatedAt: 1, pendingApprovals: 0, pendingQuestions: 0 }
+const api = { rename: vi.fn(), list: vi.fn(), create: vi.fn(), prompt: vi.fn(), events: vi.fn(), stop: vi.fn(), prewarm: vi.fn(), respondApproval: vi.fn(), answerQuestion: vi.fn(), onChanged: vi.fn() }
+beforeEach(() => {
+  vi.resetAllMocks()
+  api.list.mockResolvedValue([session]); api.events.mockResolvedValue([]); api.prewarm.mockResolvedValue(undefined); api.prompt.mockResolvedValue({ messageId: 'message' }); api.onChanged.mockReturnValue(() => {})
+  Object.defineProperty(window, 'sessionAPI', { configurable: true, value: api })
+  Object.defineProperty(window, 'api', { configurable: true, value: { workbench: { quickIndex: vi.fn().mockResolvedValue({ success: true, data: { projects: [{ id: 'project-fixture', name: '合成项目' }] } }) } } })
+})
+afterEach(cleanup)
+function mount(path = '/sessions/session-fixture'): void {
+  render(<MemoryRouter initialEntries={[path]}><Routes><Route path="sessions" element={<SessionPage />} /><Route path="sessions/:id" element={<SessionPage />} /></Routes></MemoryRouter>)
+}
+describe('native session interactions', () => {
+  it('carries clipboard references into the composer without sending and renames via keyboard', async () => {
+    render(<MemoryRouter initialEntries={[{ pathname: '/sessions/session-fixture', state: { clipboardIds: ['clip-fixture'], text: '修复这段报错' } }]}><Routes><Route path="sessions/:id" element={<SessionPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByRole('textbox', { name: '消息' })).toHaveValue('修复这段报错')
+    expect(api.prompt).not.toHaveBeenCalled()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: session.title }))
+    const title = screen.getByRole('textbox', { name: '会话标题' })
+    expect(title).toHaveFocus()
+    await user.clear(title); await user.type(title, '排查登录错误'); await user.tab()
+    expect(screen.getByRole('button', { name: '保存标题' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(api.rename).toHaveBeenCalledWith({ sessionId: session.id, title: '排查登录错误' }))
+    expect(screen.queryByRole('complementary', { name: '本会话上下文' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: '展开上下文' }))
+    expect(screen.getByRole('complementary', { name: '本会话上下文' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '收起上下文' }))
+    expect(screen.getByRole('button', { name: '展开上下文' })).toHaveAttribute('aria-expanded', 'false')
+  })
+  it('creates a session without requiring a goal or acceptance form', async () => {
+    api.create.mockResolvedValue(session)
+    mount('/sessions')
+    fireEvent.click(await screen.findByRole('button', { name: '开始会话' }))
+    await waitFor(() => expect(api.create).toHaveBeenCalledWith({ projectId: 'project-fixture', permission: 'confirm' }))
+    expect(await screen.findByRole('textbox', { name: '消息' })).toBeTruthy()
+  })
+  it('sends with Enter and keeps Shift+Enter for composing', async () => {
+    mount()
+    const input = await screen.findByRole('textbox', { name: '消息' })
+    fireEvent.change(input, { target: { value: '检查这个项目' } })
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
+    expect(api.prompt).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(api.prompt).toHaveBeenCalledWith({ sessionId: session.id, text: '检查这个项目' }))
+    await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(''))
+  })
+  it('preserves unsent text when main-process secret interception rejects it', async () => {
+    api.prompt.mockRejectedValue(new Error('检测到账号或密钥，消息尚未发送'))
+    mount()
+    const input = await screen.findByRole('textbox', { name: '消息' })
+    fireEvent.change(input, { target: { value: 'password=synthetic-only' } }); fireEvent.keyDown(input, { key: 'Enter' })
+    expect(await screen.findByRole('alert')).toHaveTextContent('尚未发送')
+    expect((input as HTMLTextAreaElement).value).toBe('password=synthetic-only')
+  })
+  it('allows a possible-secret message only after the explicit one-message choice', async () => {
+    api.prompt.mockRejectedValueOnce(new Error('POSSIBLE_SECRET：这段像是密码'))
+    mount()
+    const input = await screen.findByRole('textbox', { name: '消息' })
+    fireEvent.change(input, { target: { value: 'password="Pa55w0rd!2026"' } }); fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('button', { name: '按原样发送' }))
+    await waitFor(() => expect(api.prompt).toHaveBeenLastCalledWith({ sessionId: session.id, text: 'password="Pa55w0rd!2026"', allowPossibleSecret: true }))
+    await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(''))
+  })
+  it('shows exact approval content and sends the action fingerprint with a refusal', async () => {
+    api.list.mockResolvedValue([{ ...session, state: 'waiting_user' }])
+    api.events.mockResolvedValue([{ seq: 0, type: 'approval', at: 1, approval: { id: 'approval', taskId: session.id, runId: session.id, operation: '写入文件', target: 'example.txt', description: '原始内容：before\n修改后：after', fingerprint: 'synthetic-fingerprint', expiresAt: Date.now() + 60_000 } }])
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: '拒绝' }))
+    await waitFor(() => expect(api.respondApproval).toHaveBeenCalledWith({ id: 'approval', fingerprint: 'synthetic-fingerprint', allowed: false }))
+    expect(screen.getByText(/原始内容：before/)).toBeTruthy()
+  })
+  it('answers an official question and can stop a running conversation', async () => {
+    api.list.mockResolvedValue([{ ...session, state: 'waiting_user' }])
+    api.events.mockResolvedValue([{ seq: 0, type: 'question', at: 1, question: { id: 'question', sessionId: session.id, state: 'open', questions: [{ id: 'choice', question: '使用哪个环境？', options: [{ label: '测试环境' }] }] } }])
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: '测试环境' })); fireEvent.click(screen.getByRole('button', { name: '回答并继续' }))
+    await waitFor(() => expect(api.answerQuestion).toHaveBeenCalledWith({ id: 'question', answer: { answers: [{ id: 'choice', selected: ['测试环境'], custom: '' }] } }))
+    fireEvent.click(screen.getByRole('button', { name: '停止' }))
+    await waitFor(() => expect(api.stop).toHaveBeenCalledWith(session.id))
+  })
+  it('shows loading and recoverable errors', async () => {
+    api.list.mockRejectedValue(new Error('合成读取错误'))
+    mount('/sessions')
+    expect(screen.getByRole('status')).toHaveTextContent('正在读取')
+    expect(await screen.findByRole('alert')).toHaveTextContent('合成读取错误')
+    api.list.mockResolvedValue([])
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByRole('button', { name: '开始会话' })).toBeEnabled()
+  })
+})

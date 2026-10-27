@@ -123,16 +123,15 @@ export function SidebarUpdateButton(): JSX.Element {
       title={title}
       onClick={() => void onClick()}
       disabled={busy || status === 'downloading' || (packaged && status === 'checking')}
-      className="mt-1 flex w-full items-center gap-1.5 rounded-md border-2 px-2 py-1.5 text-left font-body text-[11px] transition-colors hover:bg-[var(--primary-soft)] disabled:opacity-60"
+      className="flex h-6 shrink-0 items-center gap-1 rounded-[6px] px-1.5 text-[11px] transition-colors hover:bg-[var(--hover)] disabled:opacity-60"
       style={{
-        borderColor: 'var(--line)',
         color: accent,
         background: status === 'available' || status === 'downloaded' ? 'var(--primary-soft)' : 'transparent'
       }}
     >
       <Icon
-        size={12}
-        strokeWidth={2.5}
+        size={11}
+        strokeWidth={1.75}
         className={packaged && (status === 'checking' || status === 'downloading') ? 'animate-spin' : ''}
       />
       <span className="min-w-0 flex-1 truncate font-medium">{label}</span>

@@ -80,6 +80,17 @@ describe('useClipboard - loading state transitions', () => {
     vi.restoreAllMocks()
   })
 
+  it('长期保存数量超过单页上限时继续分页，不停在前 5000 条', async () => {
+    const { calls } = setupApi()
+    const { result } = renderHook(() => useClipboard({ limit: 5001 }))
+    await act(async () => calls[0].resolve(Array.from({ length: 5000 }, (_, i) => makeItem(String(i))), 5001))
+    await waitFor(() => expect(calls).toHaveLength(2))
+    expect(calls[1].params).toMatchObject({ offset: 5000, limit: 1, requestKey: 'history-page' })
+    await act(async () => calls[1].resolve([makeItem('last')], 5001))
+    expect(result.current.items).toHaveLength(5001)
+    expect(result.current.items[5000]?.id).toBe('last')
+  })
+
   it('首次加载：loading 从 true 进入 false 并填充 items', async () => {
     const { calls } = setupApi()
     const { result } = renderHook(() => useClipboard())
@@ -188,7 +199,7 @@ describe('useClipboard - loading state transitions', () => {
     expect(result.current.error).toBe('IPC 炸了')
   })
 
-  it('ρ3 · P1-9：搜索 keyword 激活时，onNewItem 不匹配的新项被忽略（不增 total 不插入）', async () => {
+  it('搜索中合并通知并重新查询，重复通知不膨胀 total', async () => {
     const { calls, newItemCallback } = setupApi()
     const { result } = renderHook(() =>
       useClipboard({ filter: { keyword: 'sk' } })
@@ -212,9 +223,13 @@ describe('useClipboard - loading state transitions', () => {
     // 推送匹配的新项（"sk-matched" 包含 "sk"）
     await act(async () => {
       newItemCallback.current!(makeItem('matched', 'sk'))
+      newItemCallback.current!(makeItem('matched', 'sk'))
     })
+    await waitFor(() => expect(calls.length).toBe(2))
+    await act(async () => calls[1].resolve([{ ...makeItem('matched', 'sk'), copyCount: 2 }], 1))
     expect(result.current.items).toHaveLength(1)
     expect(result.current.total).toBe(1)
+    expect(result.current.items[0]?.copyCount).toBe(2)
   })
 
   it('相同 filter 引用变化但内容不变时：不会重复无限 refresh', async () => {

@@ -16,29 +16,6 @@ import type {
   WorkspaceContext
 } from '@/types'
 
-/**
- * ρ3 · P1-9：onNewItem 推送项与过滤器匹配判断
- * 过滤激活时若新项不匹配，不插入列表也不增 total，避免"搜索 sk- 突然冒出无关项"。
- */
-function matchesFilter(item: ClipboardItem, f: ClipboardFilter): boolean {
-  if (f.keyword && f.keyword.trim().length > 0) {
-    const kw = f.keyword.toLowerCase()
-    const content = (item.content ?? '').toLowerCase()
-    if (!content.includes(kw)) return false
-  }
-  if (f.type && item.type !== f.type) return false
-  if (f.pinnedOnly && !item.isPinned) return false
-  if (f.snippetsOnly && !item.isSnippet) return false
-  if (f.detectedKeyType && item.detectedKeyType !== f.detectedKeyType) return false
-  if (f.startTime && typeof item.createdAt === 'number' && item.createdAt < f.startTime) return false
-  if (f.endTime && typeof item.createdAt === 'number' && item.createdAt > f.endTime) return false
-  if (f.tags && f.tags.length > 0) {
-    const tags = item.tags ?? []
-    if (!f.tags.every((t) => tags.includes(t))) return false
-  }
-  return true
-}
-
 interface UseClipboardOptions {
   filter?: ClipboardFilter
   limit?: number
@@ -84,18 +61,35 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     setError(null)
 
     try {
+      const queryFilter = filterRef.current
+      const queryWorkspace = workspaceRef.current
       const response = await window.api.clipboard.getHistory({
-        filter: filterRef.current,
-        limit,
-        workspace: workspaceRef.current
+        filter: queryFilter,
+        limit: Math.min(limit, 5000),
+        workspace: queryWorkspace,
+        requestKey: 'history-page'
       })
 
       // 请求已被新请求覆盖，丢弃结果（避免老请求覆盖新数据）
       if (myToken !== requestTokenRef.current) return
 
       if (response.success && response.data) {
-        setItems(response.data.items)
-        setTotal(response.data.total)
+        const collected = [...response.data.items]
+        let latestTotal = response.data.total
+        // 置顶和长期保存不受临时条数限制；超过 IPC 单页上限时继续分页。
+        while (collected.length < limit && collected.length < latestTotal) {
+          const next = await window.api.clipboard.getHistory({
+            filter: queryFilter, workspace: queryWorkspace, requestKey: 'history-page',
+            offset: collected.length, limit: Math.min(limit - collected.length, 5000)
+          })
+          if (myToken !== requestTokenRef.current) return
+          if (!next.success || !next.data) throw new Error(next.error || '加载下一页失败')
+          latestTotal = next.data.total
+          if (!next.data.items.length) break
+          collected.push(...next.data.items)
+        }
+        setItems(collected)
+        setTotal(latestTotal)
       } else {
         setError(response.error || '获取剪贴板历史失败')
       }
@@ -109,34 +103,21 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     }
   }, [limit])
 
-  // 监听新的剪贴板内容
-  // 搜索 / 类型过滤激活时，新项若不匹配则不插入列表
-  // v3 个人版：始终 personal，直接吸收监控推送
+  // 合并连续通知后重新查询：重复复制、来源记录和自动清理都以数据库为准。
   useEffect(() => {
-    const unsubscribe = window.api.clipboard.onNewItem((item) => {
-      const currentFilter = filterRef.current
-      if (currentFilter && !matchesFilter(item, currentFilter)) {
-        // 过滤激活且新项不匹配 → 忽略推送，等用户清掉过滤或 refresh
-        return
-      }
-      setItems((prev) => {
-        // 避免重复
-        const exists = prev.find((i) => i.id === item.id)
-        if (exists) {
-          return prev
-        }
-        // 添加到开头（置顶的保持在前）
-        const pinned = prev.filter((i) => i.isPinned)
-        const unpinned = prev.filter((i) => !i.isPinned)
-        return [...pinned, item, ...unpinned].slice(0, limit)
-      })
-      setTotal((prev) => prev + 1)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const unsubscribe = window.api.clipboard.onNewItem(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => void refresh(), 60)
     })
-
     return () => {
+      clearTimeout(timer)
+      // 请求序号不是 DOM ref；卸载时必须使最新请求失效。
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      requestTokenRef.current++
       unsubscribe()
     }
-  }, [limit])
+  }, [refresh])
 
   // filter 变化时触发 refresh（依赖稳定字符串而非对象引用）
   useEffect(() => {
@@ -168,11 +149,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     try {
       const response = await window.api.clipboard.pinItem(id)
       if (response.success) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === id ? { ...item, isPinned: response.data ?? !item.isPinned } : item
-          )
-        )
+        await refresh()
         return response.data ?? false
       }
       setError(response.error || '操作失败')
@@ -181,7 +158,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       setError((err as Error).message)
       return false
     }
-  }, [])
+  }, [refresh])
 
   const copyItem = useCallback(
     async (

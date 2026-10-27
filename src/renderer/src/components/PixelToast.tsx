@@ -43,7 +43,7 @@ export function PixelToastHost(): JSX.Element | null {
       key={toast.id}
     >
       <div className="cv-toast-pixel animate-toast pointer-events-auto">
-        ★ {toast.message}
+        {toast.message}
       </div>
     </div>,
     document.body

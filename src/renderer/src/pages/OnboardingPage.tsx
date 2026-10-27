@@ -24,7 +24,7 @@ export default function OnboardingPage({ onFinished }: Props): JSX.Element {
 
   switch (ob.state.currentStep) {
     case 'welcome':
-      return <StepWelcome {...common} onNext={ob.next} />
+      return <StepWelcome {...common} onNext={ob.next} onEnter={handleComplete} />
     case 'shortcut':
       return (
         <StepShortcut
@@ -59,6 +59,6 @@ export default function OnboardingPage({ onFinished }: Props): JSX.Element {
         />
       )
     default:
-      return <StepWelcome {...common} onNext={ob.next} />
+      return <StepWelcome {...common} onNext={ob.next} onEnter={handleComplete} />
   }
 }

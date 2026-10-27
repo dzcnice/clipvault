@@ -13,7 +13,10 @@ const isHUD =
   typeof window !== 'undefined' &&
   (window.location.hash === '#hud' || window.location.hash.startsWith('#hud'))
 
-// 像素保险库：默认浅色
+// HUD 是透明窗口，画布底色只给主窗口
+if (isHUD) document.documentElement.setAttribute('data-hud', 'true')
+
+// 默认浅色
 ;(function applyInitialTheme(): void {
   try {
     const stored = window.localStorage.getItem('clipvault.theme.mode')

@@ -5,8 +5,10 @@
 
 import { useEffect, useState } from 'react'
 import type { ClipboardItem } from '@/types'
+import ClipboardOccurrences from './ClipboardOccurrences'
 import {
   Clipboard as ClipboardIcon,
+  Bookmark,
   Code2,
   Copy,
   FileText,
@@ -33,24 +35,24 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN')
 }
 
-function ClipThumb({
+export function ClipThumb({
   id,
   imageData
 }: {
   id: string
   imageData?: string
 }): JSX.Element | null {
-  const [src, setSrc] = useState<string | undefined>(imageData)
+  const [thumbnail, setThumbnail] = useState<{ id: string; src: string } | null>(null)
+  const src = imageData ?? (thumbnail?.id === id ? thumbnail.src : undefined)
   useEffect(() => {
     if (imageData) {
-      setSrc(imageData)
       return
     }
     let cancelled = false
     void window.api.clipboard
       .getThumbnail?.(id)
       .then((res) => {
-        if (!cancelled && res.success && res.data) setSrc(res.data)
+        if (!cancelled && res.success && res.data) setThumbnail({ id, src: res.data })
       })
       .catch(() => {
         /* ignore */
@@ -70,7 +72,7 @@ function ClipThumb({
 }
 
 function TypeIcon({ type }: { type: string }): JSX.Element {
-  const props = { size: 15, strokeWidth: 2.25 as const }
+  const props = { size: 14, strokeWidth: 1.75 as const }
   switch (type) {
     case 'image':
       return <ImageIcon {...props} />
@@ -84,10 +86,13 @@ function TypeIcon({ type }: { type: string }): JSX.Element {
 }
 
 interface ClipboardListProps {
+  onOpen?: (item: ClipboardItem) => void
+  focusedId?: string
   items: ClipboardItem[]
   onCopy: (item: ClipboardItem) => void
   onPin: (item: ClipboardItem) => void
   onDelete: (item: ClipboardItem) => void
+  onSave?: (item: ClipboardItem) => void
   /** 图片：按模式复制（image | path | both） */
   onCopyImage?: (item: ClipboardItem, mode: ImageCopyMode) => void
   /** @deprecated 使用 onCopyImage(..., 'path') */
@@ -100,10 +105,12 @@ interface ClipboardListProps {
 }
 
 export default function ClipboardList({
+  onOpen, focusedId,
   items,
   onCopy,
   onPin,
   onDelete,
+  onSave,
   onCopyImage,
   onCopyPath,
   selectedIds,
@@ -122,6 +129,18 @@ export default function ClipboardList({
     onCopy(item)
   }
 
+  if (onOpen) return <div aria-label="剪贴板记录" className="space-y-0.5">{items.map((item, index) => {
+    const active = focusedId === item.id, picked = selectedIds?.has(item.id) ?? false, mono = ['code', 'error', 'command', 'path', 'link'].includes(item.category || '')
+    return <div key={item.id} style={{ '--i': Math.min(index, 12) } as React.CSSProperties} className={`cv-rise group flex items-center gap-2 rounded-[10px] pl-2 pr-3 transition-colors ${active ? 'bg-[var(--primary-soft)]' : picked ? 'bg-[var(--active)]' : 'hover:bg-[var(--hover)]'}`}>
+      <input className="h-3.5 w-3.5 shrink-0 accent-[var(--blue)] opacity-40 transition-opacity checked:opacity-100 group-hover:opacity-100" type="checkbox" aria-label={`选择记录 ${index + 1}`} checked={picked} onChange={() => onToggleSelect?.(item.id)} />
+      <button className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left" onClick={() => onOpen(item)} onDoubleClick={() => onCopy(item)}>
+        <span className="cv-icon-slot">{item.isPinned ? <Pin size={14} strokeWidth={1.75} /> : <TypeIcon type={item.category === 'code' ? 'html' : item.type} />}</span>
+        <span className="min-w-0 flex-1"><span className={`block truncate text-[13.5px] ${mono ? 'font-mono text-[13px]' : ''}`}>{['secret', 'credential'].includes(item.category || '') ? '敏感资料 · ••••••' : item.aiMeta?.title || item.preview || item.content || '[图片]'}</span>
+          <span className="mt-0.5 block truncate text-xs text-[var(--ink-faint)]">{item.sourceApp || '未知来源'}{(item.copyCount || 1) > 1 ? ` · 复制 ${item.copyCount} 次` : ''}{item.isPinned ? ' · 置顶' : ''}</span></span>
+        <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-[var(--ink-faint)]">{formatTime(item.lastCopiedAt || item.createdAt)}<span className={`cv-kbd transition-opacity ${index < 9 ? (active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100') : 'invisible'}`}>{index < 9 ? index + 1 : '·'}</span></span>
+      </button></div>
+  })}</div>
+
   return (
     <div className="space-y-1">
       {items.map((item) => (
@@ -130,12 +149,14 @@ export default function ClipboardList({
           className={`cv-list-row group ${item.isPinned ? 'cv-list-row-active' : ''} ${
             selectedIds?.has(item.id) ? 'ring-1 ring-[var(--primary)]' : ''
           }`}
-          onDoubleClick={() => onCopy(item)}
+          onDoubleClick={(e) => {
+            if (!(e.target as HTMLElement).closest('button, input, summary, details')) onCopy(item)
+          }}
           title="双击按默认偏好复制"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') onCopy(item)
+            if (e.target === e.currentTarget && e.key === 'Enter') onCopy(item)
           }}
         >
           {onToggleSelect ? (
@@ -186,7 +207,8 @@ export default function ClipboardList({
             ) : null}
 
             <div className="mt-1.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
-              <span>{formatTime(item.createdAt)}</span>
+              <span title={new Date(item.lastCopiedAt ?? item.createdAt).toLocaleString()}>最近复制 {formatTime(item.lastCopiedAt ?? item.createdAt)}</span>
+              {item.isSaved ? <span className="cv-badge">长期保存</span> : null}
               <span>·</span>
               <span className="font-mono-num">
                 {item.size > 1024
@@ -226,9 +248,11 @@ export default function ClipboardList({
                 </>
               ) : null}
             </div>
+            {!item.isSnippet ? <ClipboardOccurrences item={item} /> : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+          <div className="flex max-w-24 shrink-0 flex-wrap items-center justify-end gap-0.5 opacity-100 sm:max-w-none sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+            {onSave && !item.isSaved && !item.isSnippet ? <button type="button" className="cv-btn cv-btn-ghost !p-1.5" title="长期保存独立副本" aria-label="长期保存" onClick={(e) => { e.stopPropagation(); onSave(item) }}><Bookmark size={14} strokeWidth={2.25} /></button> : null}
             {item.type === 'image' ? (
               <>
                 <button

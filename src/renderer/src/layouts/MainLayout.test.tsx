@@ -32,15 +32,15 @@ beforeEach(() => {
   }
 })
 
-describe('MainLayout · v3.1 personal nav', () => {
-  it('展示暖纸侧栏导航，无团队/AI', () => {
+describe('MainLayout · personal workbench navigation', () => {
+  it('展示工作台入口，并保留原有个人工具', () => {
     renderLayout()
 
     expect(screen.getByText('剪贴板')).toBeInTheDocument()
-    expect(screen.getByText('凭证')).toBeInTheDocument()
-    expect(screen.getByText('片段')).toBeInTheDocument()
-    expect(screen.getByText('概览')).toBeInTheDocument()
-    expect(screen.getByText('健康')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '新会话' })).toHaveAttribute('href', '/sessions')
+    expect(screen.getByText('收件箱')).toBeInTheDocument()
+    expect(screen.getByText('资源')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '更多' })).toHaveAttribute('href', '/more')
     expect(screen.getByText('设置')).toBeInTheDocument()
     expect(screen.getByText('ClipVault')).toBeInTheDocument()
 

@@ -9,6 +9,7 @@ import type { API } from '../../preload'
 
 declare global {
   interface Window {
+    sessionAPI: import('../../types/session').SessionAPI
     api: API
   }
 }

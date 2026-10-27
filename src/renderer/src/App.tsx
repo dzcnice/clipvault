@@ -3,11 +3,12 @@
  */
 
 import { useEffect, useRef, useState, lazy, Suspense } from 'react'
-import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout'
 import { ClipClearToast } from './components/ClipClearToast'
 import { UpdateNotifier } from './components/UpdateNotifier'
-import { KeyInterceptDialog } from './components/KeyInterceptDialog'
+import ResourceIntake from './components/ResourceIntakeReview'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './components/ui/dialog'
 import { useKeyIntercept } from './hooks/useKeyIntercept'
 import CommandPalette, { openCommandPalette } from './components/CommandPalette'
 import { logger } from './utils/logger'
@@ -18,6 +19,13 @@ import { PixelToastHost, showPixelToast } from './components/PixelToast'
 import { Loader2, Shield } from 'lucide-react'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const LegacyTasksPage = lazy(() => import('./pages/LegacyTasksPage'))
+const SessionHistoryPage = lazy(() => import('./pages/SessionHistoryPage'))
+const SessionPage = lazy(() => import('./pages/SessionPage'))
+const MorePage = lazy(() => import('./pages/MorePage'))
+const InboxPage = lazy(() => import('./pages/InboxPage'))
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const ResourcesPage = lazy(() => import('./pages/ResourcesPage'))
 const CredentialPage = lazy(() => import('./pages/CredentialPage'))
 const ClipboardPage = lazy(() => import('./pages/ClipboardPage'))
 const SnippetsPage = lazy(() => import('./pages/SnippetsPage'))
@@ -36,6 +44,11 @@ const ImportWizardPage = lazy(() =>
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 
 type Stage = 'loading' | 'legacy-migrate' | 'onboarding' | 'ready' | 'error'
+
+function WorkbenchRedirect(): JSX.Element {
+  const location = useLocation(), params = new URLSearchParams(location.search)
+  return <Navigate to="/sessions" replace state={location.state ?? { projectId: params.get('project') || undefined }} />
+}
 
 function EventBridge(): null {
   const navigate = useNavigate()
@@ -81,7 +94,7 @@ function EventBridge(): null {
         try {
           const res = await window.api.clipboard.getHistory({ limit: 1 })
           const item = res.data?.items?.[0]
-          if (item) await window.api.clipboard.copyItem(item.id)
+          if (item) { const copied = await window.api.clipboard.copyItem(item.id, { paste: true }); if (!copied.success) showPixelToast(copied.error || '粘贴失败') }
         } catch (err) {
           logger.error('[shortcut:paste-recent] failed:', err)
         }
@@ -112,62 +125,10 @@ function EventBridge(): null {
   return null
 }
 
-function mapDetectedTypeToCredentialType(detected?: string): string {
-  const t = (detected ?? '').toLowerCase()
-  if (t.includes('ssh')) return 'ssh_key'
-  if (t.includes('token') || t.includes('jwt') || t.includes('bearer')) return 'token'
-  if (t.includes('password') || t.includes('secret')) return 'password'
-  return 'api_key'
-}
-
 function KeyInterceptBridge(): JSX.Element | null {
   const { prompt, decide } = useKeyIntercept()
   if (!prompt) return null
-
-  const saveToVault = async (name: string): Promise<void> => {
-    const d = new Date()
-    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const trimmed =
-      name.trim() || `${prompt.detectedKeyType || '密钥'} · ${stamp}`
-    try {
-      const res = await window.api.credential.create({
-        name: trimmed,
-        type: mapDetectedTypeToCredentialType(prompt.detectedKeyType) as never,
-        value: prompt.content,
-        tags: prompt.detectedKeyType ? [prompt.detectedKeyType] : undefined,
-        metadata: prompt.detectedKeyType
-          ? { provider: prompt.detectedKeyType }
-          : undefined
-      })
-      if (res.success) {
-        decide('saveLocalOnly')
-        showPixelToast(`已收入钥匙箱 · ${trimmed}`)
-      } else {
-        showPixelToast(res.error || '保存失败')
-      }
-    } catch (err) {
-      logger.error('[KeyIntercept] create failed:', err)
-      showPixelToast('保存失败')
-    }
-  }
-
-  return (
-    <KeyInterceptDialog
-      open={true}
-      onOpenChange={(open: boolean) => {
-        if (!open) decide('cancel')
-      }}
-      content={prompt.content}
-      detectedType={prompt.detectedKeyType}
-      onShareAsCredential={(name) => {
-        void saveToVault(name)
-      }}
-      onSaveLocalOnly={(name) => {
-        void saveToVault(name)
-      }}
-      onCancel={() => decide('cancel')}
-    />
-  )
+  return <Dialog open onOpenChange={open => { if (!open) decide('cancel') }}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogTitle>检测到账号或密钥</DialogTitle><DialogDescription>原文保留在本机。保存为资源后可按名称找回。</DialogDescription><ResourceIntake key={prompt.promptId} source={{ promptId: prompt.promptId }} onSaved={resource => { decide('saveLocalOnly'); showPixelToast(`已保存资源 · ${resource.name}`) }} onCancel={() => decide('cancel')} /></DialogContent></Dialog>
 }
 
 function RouteFallback(): JSX.Element {
@@ -379,7 +340,22 @@ function App(): JSX.Element {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<Navigate to="/clipboard" replace />} />
+              <Route index element={<Navigate to="/workbench" replace />} />
+              <Route path="workbench" element={<WorkbenchRedirect />} />
+              <Route path="sessions" element={<SessionPage />} />
+              <Route path="sessions/:id" element={<SessionPage />} />
+              <Route path="legacy-tasks" element={<LegacyTasksPage />} />
+              <Route path="history" element={<SessionHistoryPage />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="resources" element={<ResourcesPage />} />
+              <Route path="resources/:id" element={<ResourcesPage />} />
+              <Route path="more" element={<MorePage />} />
+              <Route path="more/projects" element={<ProjectsPage />} />
+              <Route path="more/totp" element={<TotpPage />} />
+              <Route path="more/snippets" element={<SnippetsPage />} />
+              <Route path="more/credentials" element={<CredentialPage />} />
+              <Route path="more/health" element={<HealthReportPage />} />
+              <Route path="inbox" element={<InboxPage />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="credentials" element={<CredentialPage />} />
               <Route path="clipboard" element={<ClipboardPage />} />

@@ -3,13 +3,14 @@
  */
 
 import type { LucideIcon } from 'lucide-react'
-import { ClipboardList, HardDrive, KeyRound, ShieldCheck } from 'lucide-react'
+import { ClipboardList, HardDrive, KeyRound, PanelsTopLeft } from 'lucide-react'
 import { OnboardingLayout } from './OnboardingLayout'
 
 interface Props {
   stepIndex: number
   totalSteps: number
   onNext: () => void
+  onEnter?: () => void
 }
 
 interface Highlight {
@@ -19,20 +20,20 @@ interface Highlight {
 }
 
 const HIGHLIGHTS: Highlight[] = [
-  { icon: HardDrive, title: '本地存档', desc: '数据只在本机' },
-  { icon: ShieldCheck, title: '免登录', desc: '系统安全存储' },
+  { icon: HardDrive, title: '项目资料', desc: '本地保存，按项目与环境整理' },
+  { icon: PanelsTopLeft, title: '编程任务', desc: '选择上下文，批准后连接模型' },
   { icon: ClipboardList, title: '剪贴板', desc: '复制即入包' },
-  { icon: KeyRound, title: '钥匙箱', desc: '凭证加密保管' }
+  { icon: KeyRound, title: '账号与密钥', desc: '多字段加密保存，随时复制' }
 ]
 
-export function StepWelcome({ stepIndex, totalSteps, onNext }: Props): JSX.Element {
+export function StepWelcome({ stepIndex, totalSteps, onNext, onEnter }: Props): JSX.Element {
   return (
     <OnboardingLayout
       stepId="welcome"
       stepIndex={stepIndex}
       totalSteps={totalSteps}
       title="欢迎来到 ClipVault"
-      description="像素保险库：剪贴板 + 凭证，本地优先，打开即用。"
+      description="你的个人 AI 编程工作台：剪贴板、账号资料、项目与任务。"
       onNext={onNext}
       nextLabel="开始"
       hidePrev
@@ -58,6 +59,7 @@ export function StepWelcome({ stepIndex, totalSteps, onNext }: Props): JSX.Eleme
           )
         })}
       </div>
+      {onEnter && <button className="cv-btn cv-btn-secondary mt-4" onClick={onEnter}>直接进入工作台，稍后设置</button>}
     </OnboardingLayout>
   )
 }

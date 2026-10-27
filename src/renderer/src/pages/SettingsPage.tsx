@@ -3,6 +3,7 @@
  * 安全说明 / 截图粘贴模式 / 快捷键表 / 托盘语义 / 导入导出
  */
 
+import InboxRuleSettings from '../components/InboxRuleSettings'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -151,7 +152,9 @@ export default function SettingsPage(): JSX.Element {
     }
   }, [])
 
+  const [allowResourceUsernameAI, setAllowResourceUsernameAI] = useState(false)
   const applyPrefsData = (data: {
+    allowResourceUsernameAI?: boolean
     imagePasteMode?: ImagePasteMode
     imagesDir?: string | null
     autoClearTtlMs?: number
@@ -170,6 +173,7 @@ export default function SettingsPage(): JSX.Element {
     biometricOnCopy?: boolean
     biometricOnExport?: boolean
   }): void => {
+    setAllowResourceUsernameAI(data.allowResourceUsernameAI === true)
     if (data.imagePasteMode) setImageMode(data.imagePasteMode)
     if ('imagesDir' in data) setImagesDirCustom(data.imagesDir ?? null)
     if (data.resolvedImagesDir) setResolvedImagesDir(data.resolvedImagesDir)
@@ -288,6 +292,29 @@ export default function SettingsPage(): JSX.Element {
     } finally {
       setBackupBusy(false)
     }
+  }
+
+  const handlePortableBackup = async (restore: boolean): Promise<void> => {
+    const password = await promptDialog({ title: restore ? '导入完整备份' : '导出完整备份', message: restore ? '输入导出时的备份密码；本机自动备份可留空。接下来选择文件并确认恢复。' : '设置至少 12 个字符的备份密码。它只保护导出文件，不修改当前资料库。', inputType: 'password', placeholder: '备份密码' })
+    if (password === null) return
+    if (!restore) {
+      const repeated = await promptDialog({ title: '再次输入备份密码', message: '请妥善保管，换设备恢复时需要这个密码。', inputType: 'password', placeholder: '再次输入备份密码' })
+      if (repeated !== password) { showPixelToast('两次密码不一致，未导出'); return }
+    }
+    setBackupBusy(true)
+    try {
+      if (restore) {
+        const result = await window.api.backup.importPortable(password || undefined)
+        if (!result.success) showPixelToast(result.error || '恢复失败')
+        else if (result.data) { showPixelToast('完整备份已恢复，请重新解锁'); setTimeout(() => location.reload(), 800) }
+      } else {
+        const result = await window.api.backup.exportPortable(password)
+        if (!result.success) showPixelToast(result.error || '导出失败')
+        else if (result.data?.filePath) showPixelToast('完整加密备份已导出')
+        await refreshBackups()
+      }
+    } catch { showPixelToast('备份操作失败，当前资料保留') }
+    finally { setBackupBusy(false) }
   }
 
   const handleAutoLaunchChange = async (enabled: boolean): Promise<void> => {
@@ -442,6 +469,7 @@ export default function SettingsPage(): JSX.Element {
         <header className="mb-6">
           <p className="cv-kicker mb-2">Preferences</p>
           <h1 className="cv-page-title">{t('settings:title', '设置')}</h1>
+          <InboxRuleSettings />
           <VersionBadge />
         </header>
 
@@ -862,6 +890,10 @@ export default function SettingsPage(): JSX.Element {
                 />
               </label>
               <label className="flex cursor-pointer items-center justify-between gap-4">
+                <div className="text-sm">允许把用户名发给 AI 用于命名<p className="text-xs text-muted-foreground">仅在主动选择 AI 整理资源时生效；密码、密钥和验证码种子始终留在本机。</p></div>
+                <input type="checkbox" checked={allowResourceUsernameAI} onChange={event => { setAllowResourceUsernameAI(event.target.checked); void saveClipPrefs({ allowResourceUsernameAI: event.target.checked }) }} />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4">
                 <div className="text-sm">凭证详情默认遮罩 secret</div>
                 <input
                   type="checkbox"
@@ -910,7 +942,7 @@ export default function SettingsPage(): JSX.Element {
 
           <Section
             title="本地备份"
-            description="数据库副本保存在本机 userData/backups。自动备份保留约 7 天；恢复前会先备份当前库。"
+            description="本机备份包含数据库、已归档任务会话和加密图片，保留约 7 天。完整导出可设置独立密码用于换设备恢复；外部代码项目与文件路径引用不随备份复制。"
           >
             <p className="mb-2 text-xs text-muted-foreground">
               自动备份：应用运行期间按日策略清理超期文件 · 当前 {backups.length} 份
@@ -918,6 +950,7 @@ export default function SettingsPage(): JSX.Element {
                 ? ` · 最近 ${new Date(backups[0].date).toLocaleString()}`
                 : ''}
             </p>
+            <div className="mb-3 flex flex-wrap gap-2"><button type="button" className="cv-btn cv-btn-secondary" disabled={backupBusy} onClick={() => void handlePortableBackup(false)}>导出完整加密备份</button><button type="button" className="cv-btn cv-btn-secondary" disabled={backupBusy} onClick={() => void handlePortableBackup(true)}>导入完整备份</button></div>
             <div className="mb-3 flex flex-wrap gap-2">
               <button
                 type="button"

@@ -34,7 +34,10 @@ function maskValue(value: string): string {
   return `${value.slice(0, 4)}••••••••${value.slice(-4)}`
 }
 
-export default function CredentialDetail({
+export default function CredentialDetail(props: CredentialDetailProps): JSX.Element {
+  return <CredentialDetailContent key={props.credential.id} {...props} />
+}
+function CredentialDetailContent({
   credential,
   onCopy,
   onEdit,
@@ -42,16 +45,15 @@ export default function CredentialDetail({
   onToggleFavorite
 }: CredentialDetailProps): JSX.Element {
   const [showValue, setShowValue] = useState(false)
-  const [maskDefault, setMaskDefault] = useState(true)
 
   useEffect(() => {
-    setShowValue(false)
+    let cancelled = false
     void window.api.prefs?.get?.().then((res) => {
-      if (res.success && res.data && typeof res.data.maskSecretsByDefault === 'boolean') {
-        setMaskDefault(res.data.maskSecretsByDefault)
+      if (!cancelled && res.success && res.data && typeof res.data.maskSecretsByDefault === 'boolean') {
         setShowValue(!res.data.maskSecretsByDefault)
       }
     })
+    return () => { cancelled = true }
   }, [credential.id])
 
   const url =
@@ -59,7 +61,7 @@ export default function CredentialDetail({
     credential.metadata.custom?.url ||
     (credential.metadata.host ? `https://${credential.metadata.host}` : '')
 
-  const revealed = !maskDefault && showValue ? true : showValue
+  const revealed = showValue
 
   return (
     <div className="flex h-full flex-col">

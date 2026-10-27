@@ -38,7 +38,7 @@ export interface UseTOTPState {
   refresh: () => Promise<void>
 }
 
-export function useTOTP(credentialId?: string): UseTOTPState {
+export function useTOTP(credentialId?: string, resource = false): UseTOTPState {
   const [code, setCode] = useState('')
   const [remainingMs, setRemainingMs] = useState(30000)
   const [periodMs, setPeriodMs] = useState(30000)
@@ -52,14 +52,14 @@ export function useTOTP(credentialId?: string): UseTOTPState {
   const refresh = useCallback(async () => {
     if (!credentialId) return
     const api = getApi()
-    if (!api) {
+    if (!api && !resource) {
       setError('API 未挂载')
       return
     }
     const myToken = ++requestTokenRef.current
     setLoading(true)
     try {
-      const r = await api.generate({ credentialId })
+      const r = resource ? await window.api.workbench.resourceCode(credentialId) : await api!.generate({ credentialId })
       if (myToken !== requestTokenRef.current) return
       if (r.success && r.data) {
         setCode(r.data.code)
@@ -68,7 +68,7 @@ export function useTOTP(credentialId?: string): UseTOTPState {
         setError(undefined)
         lastGenRef.current = Date.now()
       } else {
-        setError(r.error ?? 'generate failed')
+        setCode(''); setError(r.error ?? 'generate failed')
       }
     } catch (err) {
       if (myToken !== requestTokenRef.current) return
@@ -79,10 +79,11 @@ export function useTOTP(credentialId?: string): UseTOTPState {
         setLoading(false)
       }
     }
-  }, [credentialId])
+  }, [credentialId, resource])
 
   useEffect(() => {
     if (!credentialId) return
+    setCode('')
     void refresh()
     // 每秒本地倒计时 + 每 10s 重新取码
     const tick = setInterval(() => {
@@ -90,7 +91,7 @@ export function useTOTP(credentialId?: string): UseTOTPState {
     }, 1000)
     const regen = setInterval(() => {
       void refresh()
-    }, 10_000)
+    }, resource ? 1000 : 10_000)
     return (): void => {
       clearInterval(tick)
       clearInterval(regen)
@@ -98,7 +99,7 @@ export function useTOTP(credentialId?: string): UseTOTPState {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestTokenRef.current++
     }
-  }, [credentialId, refresh])
+  }, [credentialId, refresh, resource])
 
   return { code, remainingMs, periodMs, loading, error, refresh }
 }

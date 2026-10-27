@@ -8,7 +8,7 @@ import CommandRoot from './CommandRoot'
 
 export function HUDRoot(): JSX.Element {
   return (
-    <div className="flex h-screen w-screen items-start justify-center bg-transparent p-4">
+    <div className="flex h-screen w-screen items-start justify-center bg-transparent p-3">
       <CommandRoot />
     </div>
   )

@@ -1,148 +1,108 @@
-/**
- * MainLayout · 像素壳 + 清晰导航文案
- */
-
-import { useEffect, useState } from 'react'
-import { Outlet, NavLink } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
+import { MessageSquarePlus, ClipboardList, Inbox, KeyRound, Ellipsis, Settings, PanelLeftClose, PanelLeftOpen, Search, History } from 'lucide-react'
 import TitleBar from '../components/TitleBar'
+import ClipIsland from '../components/ClipIsland'
 import { SidebarUpdateButton } from '../components/SidebarUpdateButton'
-import clipVaultLogo from '../assets/clipvault-logo-v3.png'
-import {
-  Activity,
-  ClipboardList,
-  KeyRound,
-  LayoutDashboard,
-  Scissors,
-  Settings,
-  Timer,
-  type LucideIcon
-} from 'lucide-react'
+import type { HostSessionSummary } from '@/types/session'
+import type { WorkProject, WorkTask } from '@/types/workbench'
 
-interface NavItem {
-  path: string
-  label: string
-  icon: LucideIcon
-  hint?: string
-}
-
-const PRIMARY_NAV: NavItem[] = [
-  { path: '/clipboard', label: '剪贴板', icon: ClipboardList, hint: '历史记录' },
-  { path: '/credentials', label: '凭证', icon: KeyRound, hint: '钥匙箱' },
-  { path: '/snippets', label: '片段', icon: Scissors, hint: '常用模板' }
+const nav = [
+  { path: '/sessions', label: '新会话', Icon: MessageSquarePlus },
+  { path: '/clipboard', label: '剪贴板', Icon: ClipboardList },
+  { path: '/inbox', label: '收件箱', Icon: Inbox },
+  { path: '/resources', label: '资源', Icon: KeyRound }
 ]
-
-const SECONDARY_NAV: NavItem[] = [
-  { path: '/dashboard', label: '概览', icon: LayoutDashboard },
-  { path: '/totp', label: 'TOTP', icon: Timer, hint: '验证码总览' },
-  { path: '/health', label: '健康', icon: Activity },
-  { path: '/settings', label: '设置', icon: Settings }
-]
-
-function readVersionInfo(): Promise<{ version: string; builtAt: string } | null> {
-  const api = (
-    window as unknown as {
-      api?: {
-        system?: {
-          getVersion?: () => Promise<{
-            success: boolean
-            data?: { version: string; builtAt: string }
-          }>
-        }
-      }
-    }
-  ).api
-  if (!api?.system?.getVersion) return Promise.resolve(null)
-  return api.system
-    .getVersion()
-    .then((res) => (res.success && res.data ? res.data : null))
-    .catch(() => null)
-}
+const stateText = { idle: '就绪', starting: '启动中', running: '进行中', waiting_user: '等你确认', stopping: '停止中', stopped: '已停止', failed: '未完成', queued: '排队中' }
+const dotClass = (state: HostSessionSummary['state']): string => state === 'failed' ? 'cv-dot-failed' : state === 'waiting_user' ? 'cv-dot-waiting' : ['running', 'starting', 'queued'].includes(state) ? 'cv-dot-running' : 'cv-dot-idle'
+const icon = { size: 16, strokeWidth: 1.75 }
 
 export default function MainLayout(): JSX.Element {
-  const [versionInfo, setVersionInfo] = useState<{
-    version: string
-    builtAt: string
-  } | null>(null)
+  const navigate = useNavigate(), location = useLocation()
+  const [collapsed, setCollapsed] = useState(false), [sessions, setSessions] = useState<HostSessionSummary[]>([]), [projects, setProjects] = useState<WorkProject[]>([])
+  const [version, setVersion] = useState(''), [error, setError] = useState(''), [model, setModel] = useState<{ name: string; host: string } | null>(null)
+  const [inboxCount, setInboxCount] = useState(0), [legacy, setLegacy] = useState<WorkTask[]>([])
+  const navRef = useRef<HTMLElement>(null), glideRef = useRef<HTMLSpanElement>(null)
 
+  useEffect(() => { let alive = true; const update = (): void => { void window.api.workbench?.inbox?.().then(result => { if (alive && result.success && result.data) setInboxCount(result.data.length) }).catch(() => {}) }; update(); const off = window.api.workbench?.onInboxChanged?.(update); return () => { alive = false; off?.() } }, [])
   useEffect(() => {
-    void readVersionInfo().then((info) => {
-      if (info) setVersionInfo(info)
-    })
+    let alive = true
+    const update = (): void => { void window.api.workbench?.modelService?.().then(result => { if (alive && result.success && result.data) setModel(result.data.configured ? { name: result.data.model, host: (() => { try { return new URL(result.data!.endpoint).hostname.replace(/^api\./, '') } catch { return '' } })() } : null) }).catch(() => {}) }
+    update(); const off = window.api.workbench?.onChanged?.(update)
+    return () => { alive = false; off?.() }
   }, [])
+  useEffect(() => {
+    let alive = true, timer: ReturnType<typeof setTimeout> | undefined
+    const update = (): void => {
+      if (!window.sessionAPI?.list) return
+      void window.sessionAPI.list().then(items => { if (alive) { setSessions(items); setError('') } }).catch(() => { if (alive) setError('会话列表暂不可用') })
+    }
+    update()
+    const off = window.sessionAPI?.onChanged?.(() => { if (!timer) timer = setTimeout(() => { timer = undefined; update() }, 200) })
+    void window.api?.workbench?.quickIndex?.().then(result => { if (alive && result.success && result.data) { setProjects(result.data.projects); setLegacy(result.data.tasks ?? []) } }).catch(() => {})
+    void window.api?.system?.getVersion?.().then(result => { if (alive && result.success && result.data) setVersion(result.data.version) }).catch(() => {})
+    const key = (event: KeyboardEvent): void => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') { event.preventDefault(); navigate('/sessions') } }
+    window.addEventListener('keydown', key)
+    return () => { alive = false; off?.(); clearTimeout(timer); window.removeEventListener('keydown', key) }
+  }, [navigate])
+  useLayoutEffect(() => {
+    const active = navRef.current?.querySelector<HTMLElement>('a[aria-current="page"]'), glide = glideRef.current
+    if (!glide) return
+    if (active) glide.style.transform = `translateY(${active.offsetTop}px)`
+    glide.style.opacity = active ? '1' : '0'
+  }, [location.pathname, collapsed])
 
-  const renderNav = (items: NavItem[]): JSX.Element => (
-    <div className="space-y-1">
-      {items.map((item) => {
-        const Icon = item.icon
-        return (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              `cv-sidebar-item ${isActive ? 'cv-sidebar-item-active' : ''}`
-            }
-            title={item.hint ?? item.label}
-          >
-            <span className="cv-icon-slot !h-8 !w-8">
-              <Icon size={15} strokeWidth={2.25} />
-            </span>
-            <span className="truncate">{item.label}</span>
-          </NavLink>
-        )
-      })}
-    </div>
-  )
-
-  return (
-    <div className="cv-app-shell">
-      <TitleBar />
-
-      <div className="flex min-h-0 flex-1 gap-3 p-3 pt-1">
-        <aside className="cv-panel-soft flex w-[15rem] shrink-0 flex-col overflow-hidden">
-          <div className="flex items-center gap-3 border-b-2 border-[var(--line)] px-3 py-3">
-            <div className="cv-icon-slot !h-10 !w-10 !p-1" aria-hidden="true">
-              <img
-                src={clipVaultLogo}
-                alt=""
-                className="h-full w-full object-contain"
-                draggable={false}
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="font-pixel truncate text-[15px] font-bold tracking-wide text-foreground">
-                ClipVault
-              </div>
-              <div className="font-body text-[11px] text-muted-foreground">本地钥匙箱</div>
-            </div>
+  const groups = [...new Set(sessions.map(item => item.projectId))]
+  return <div className="cv-app-shell bg-[var(--background)]">
+    <ClipIsland />
+    <TitleBar />
+    <div className="flex min-h-0 flex-1 pb-2.5 pr-2.5">
+      <aside className="cv-main-nav flex shrink-0 flex-col overflow-hidden px-3 transition-[width] duration-300 ease-[cubic-bezier(.16,1,.3,1)]" data-collapsed={collapsed}>
+        <div className="flex h-10 items-center gap-2.5 px-1.5">
+          <span aria-hidden className="relative h-[22px] w-[22px] shrink-0 overflow-hidden rounded-[7px] bg-[var(--primary)] before:absolute before:inset-[5px_9px_9px_5px] before:rounded-[3px] before:bg-[var(--background)] after:absolute after:inset-[9px_5px_5px_9px] after:rounded-[3px] after:border-[1.6px] after:border-[var(--background)]" />
+          {!collapsed && <span className="font-semibold tracking-[-.01em]">ClipVault</span>}
+          <button aria-label={collapsed ? '展开侧栏' : '收起侧栏'} className="cv-btn cv-btn-ghost ml-auto !h-7 !px-1.5" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen {...icon} /> : <PanelLeftClose {...icon} />}</button>
+        </div>
+        <button type="button" title="快速粘贴" onClick={() => void window.api.hud?.toggle?.()} className={`mb-3 mt-2 flex h-9 items-center gap-2 rounded-[10px] bg-[var(--surface)] text-[13px] text-[var(--ink-faint)] shadow-[var(--shadow)] transition-transform duration-200 hover:-translate-y-px ${collapsed ? 'justify-center' : 'pl-3 pr-2'}`}>
+          <Search {...icon} size={15} />{!collapsed && <><span className="flex-1 text-left">搜索或粘贴</span><kbd className="cv-kbd">Alt Space</kbd></>}
+        </button>
+        <nav ref={navRef} aria-label="主导航" className="relative flex flex-col gap-0.5">
+          <span ref={glideRef} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[34px] rounded-[9px] bg-[var(--active)] opacity-0 transition-[transform,opacity] duration-500 ease-[cubic-bezier(.34,1.56,.64,1)]" />
+          {nav.map(({ path, label, Icon }) => <NavLink end={path === '/sessions'} to={path} key={path} title={label} aria-label={label}
+            className={({ isActive }) => `relative z-[1] flex h-[34px] items-center gap-2.5 rounded-[9px] px-2.5 text-[13.5px] transition-colors ${isActive ? 'font-medium text-[var(--ink)]' : 'text-[var(--ink-soft)] hover:bg-[var(--hover)] hover:text-[var(--ink)]'}`}>
+            <Icon {...icon} />{!collapsed && <span>{label}</span>}
+            {path === '/inbox' && inboxCount > 0 && <span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[var(--blue)] px-1.5 font-mono text-[11px] font-semibold text-white" aria-label={`${inboxCount} 条建议`}>{inboxCount}</span>}
+            {!collapsed && path === '/sessions' && <kbd className="cv-kbd ml-auto">Ctrl N</kbd>}
+          </NavLink>)}
+        </nav>
+        {!collapsed && <nav aria-label="会话列表" className="-mx-1 mt-5 min-h-0 flex-1 overflow-y-auto px-1 pb-4">
+          {error && <p role="alert" className="px-2.5 text-xs text-[var(--ink-faint)]">{error}</p>}
+          {!sessions.length && !error && <p className="px-2.5 text-xs leading-relaxed text-[var(--ink-faint)]">开始一次会话，历史会保存在这里。</p>}
+          {groups.map(projectId => <section key={projectId} className="mb-4">
+            <h2 className="mb-1 truncate px-2.5 text-xs text-[var(--ink-faint)]">{projects.find(item => item.id === projectId)?.name ?? '项目会话'}</h2>
+            {sessions.filter(item => item.projectId === projectId).map((item, index) => <NavLink title={stateText[item.state]} key={item.id} to={'/sessions/' + item.id} style={{ '--i': index } as React.CSSProperties}
+              className={({ isActive }) => `cv-rise flex h-8 items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]' : 'text-[var(--ink-soft)] hover:bg-[var(--hover)]'}`}>
+              <span aria-label={stateText[item.state]} className={`cv-dot ${dotClass(item.state)}`} /><span className="truncate">{item.title}</span>
+              {item.pendingApprovals > 0 && <span className="ml-auto font-mono text-[11px] text-[var(--state-waiting)]">{item.pendingApprovals}</span>}
+            </NavLink>)}
+          </section>)}
+          <Link to="/history" className="flex h-8 items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]"><History {...icon} size={15} />搜索会话历史</Link>
+          {legacy.length > 0 && <section className="mt-4"><h2 className="mb-1 px-2.5 text-xs text-[var(--ink-faint)]">3.4 历史 · 只读</h2>{legacy.slice(0, 6).map(task => <NavLink to={'/legacy-tasks?task=' + encodeURIComponent(task.id)} key={task.id} className="block h-8 truncate rounded-[9px] px-2.5 text-[13px] leading-8 text-[var(--ink-soft)] hover:bg-[var(--hover)]">{task.title}</NavLink>)}{legacy.length > 6 && <Link to="/legacy-tasks" className="block px-2.5 pt-1 text-xs text-[var(--ink-faint)] hover:text-[var(--ink)]">全部历史任务</Link>}</section>}
+        </nav>}
+        {collapsed && <div className="flex-1" />}
+        <div className="mt-auto flex flex-col gap-0.5 border-t border-[var(--line)] pb-1 pt-2">
+          {!collapsed && <Link to="/resources" title="模型服务" className="mb-1 flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[12.5px] text-[var(--ink-soft)] hover:bg-[var(--hover)]">
+            <span className={`cv-dot ${model ? 'cv-dot-done' : 'cv-dot-idle'}`} style={{ width: 6, height: 6 }} />
+            {model ? <><span className="truncate font-mono text-[var(--ink)]">{model.name}</span><span className="truncate text-[var(--ink-faint)]">· {model.host}</span></> : <span>配置模型服务</span>}
+          </Link>}
+          <div className={`flex ${collapsed ? 'flex-col' : 'items-center'} gap-0.5`}>
+            <Link className="cv-sidebar-item flex-1" aria-label="更多" title="更多" to="/more"><Ellipsis {...icon} />{!collapsed && '更多'}</Link>
+            <Link className="cv-sidebar-item flex-1" aria-label="设置" title="设置" to="/settings"><Settings {...icon} />{!collapsed && '设置'}</Link>
           </div>
-
-          <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-            <div>
-              <div className="cv-kicker mb-2 px-2">背包</div>
-              {renderNav(PRIMARY_NAV)}
-            </div>
-            <div className="cv-divider mx-1" />
-            <div>
-              <div className="cv-kicker mb-2 px-2">工具</div>
-              {renderNav(SECONDARY_NAV)}
-            </div>
-          </nav>
-
-          <div className="border-t-2 border-[var(--line)] px-3 py-2">
-            <p className="font-mono text-[10px] text-muted-foreground">
-              v{versionInfo?.version ?? '…'}
-            </p>
-            <p className="font-body mt-0.5 text-[11px] text-muted-foreground">
-              本机存档 · 免登录
-            </p>
-            <SidebarUpdateButton />
-          </div>
-        </aside>
-
-        <main className="cv-panel min-w-0 flex-1 overflow-hidden animate-fadeIn">
-          <Outlet />
-        </main>
-      </div>
+          {!collapsed && <div className="flex items-center justify-between px-2.5 pt-1 text-[11px] text-[var(--ink-faint)]"><span className="truncate">本机存档{version ? ' · v' + version : ''}</span><SidebarUpdateButton /></div>}
+        </div>
+      </aside>
+      <main className="relative min-w-0 flex-1 overflow-hidden rounded-[16px] bg-[var(--surface)] shadow-[var(--shadow)]"><div key={location.pathname.split('/')[1]} className="h-full animate-fadeIn"><Outlet /></div></main>
     </div>
-  )
+  </div>
 }

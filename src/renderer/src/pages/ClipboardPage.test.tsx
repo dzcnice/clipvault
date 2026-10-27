@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import type { ClipboardItem } from '@/types'
 import { WorkspaceProvider } from '../contexts/WorkspaceContext'
 import ClipboardPage from './ClipboardPage'
@@ -12,7 +13,7 @@ import ClipboardPage from './ClipboardPage'
 function renderPage(): ReturnType<typeof render> {
   return render(
     <WorkspaceProvider>
-      <ClipboardPage />
+      <MemoryRouter><ClipboardPage /></MemoryRouter>
     </WorkspaceProvider>
   )
 }
@@ -109,7 +110,7 @@ describe('ClipboardPage - render branch priority', () => {
       expect(screen.getByText(/2\s*条/)).toBeInTheDocument()
     })
 
-    const searchInput = screen.getByPlaceholderText('搜索历史内容…')
+    const searchInput = screen.getByRole('searchbox')
     await user.type(searchInput, 'hel')
 
     await waitFor(() => {

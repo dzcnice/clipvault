@@ -12,6 +12,7 @@ interface SearchBarProps {
   onChange: (value: string) => void
   debounceMs?: number
   registerGlobal?: boolean
+  onAskAI?: (query: string) => void
 }
 
 export default function SearchBar({
@@ -19,7 +20,8 @@ export default function SearchBar({
   value,
   onChange,
   debounceMs = 300,
-  registerGlobal = true
+  registerGlobal = true,
+  onAskAI
 }: SearchBarProps): JSX.Element {
   const [localValue, setLocalValue] = useState(value)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -28,6 +30,7 @@ export default function SearchBar({
   useEffect(() => {
     setLocalValue(value)
   }, [value])
+  useEffect(() => () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }, [])
 
   useRegisterGlobalSearch(registerGlobal, inputRef)
 
@@ -41,6 +44,7 @@ export default function SearchBar({
   }
 
   const handleClear = (): void => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
     setLocalValue('')
     onChange('')
     inputRef.current?.focus()
@@ -61,6 +65,7 @@ export default function SearchBar({
         placeholder={placeholder}
         value={localValue}
         onChange={handleChange}
+        onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && onAskAI) { event.preventDefault(); if (debounceTimer.current) clearTimeout(debounceTimer.current); onChange(localValue); onAskAI(localValue) } }}
         aria-label={placeholder}
       />
       {localValue ? (

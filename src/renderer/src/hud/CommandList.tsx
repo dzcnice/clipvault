@@ -9,19 +9,22 @@ import { CommandItem } from './CommandItem'
 interface Props {
   commands: HudCommand[]
   onSelect: (cmd: HudCommand) => void
+  pending?: boolean
 }
 
 const GROUP_LABELS: Record<HudCommandCategory, string> = {
   search: '搜索',
   navigate: '导航',
   action: '操作',
-  credential: '凭证',
-  clipboard: '剪贴板',
+  credential: '片段与资源',
+  clipboard: '最近复制',
   snippet: '片段'
 }
 
-export function CommandList({ commands, onSelect }: Props): JSX.Element {
+export function CommandList({ commands, onSelect, pending = false }: Props): JSX.Element {
   const groups = new Map<HudCommandCategory, HudCommand[]>()
+  const order: HudCommandCategory[] = ['clipboard', 'snippet', 'credential', 'search', 'action', 'navigate']
+  let number = 0
   for (const cmd of commands) {
     const bucket = groups.get(cmd.category) ?? []
     bucket.push(cmd)
@@ -29,18 +32,18 @@ export function CommandList({ commands, onSelect }: Props): JSX.Element {
   }
 
   return (
-    <Command.List className="max-h-[360px] overflow-y-auto p-2">
-      <Command.Empty className="px-4 py-6 text-center text-sm opacity-60">
+    <Command.List className="max-h-[330px] overflow-y-auto p-1.5">
+      {!pending ? <Command.Empty className="px-4 py-10 text-center text-[13px] text-[var(--ink-faint)]">
         未找到匹配的命令
-      </Command.Empty>
-      {Array.from(groups.entries()).map(([cat, items]) => (
+      </Command.Empty> : null}
+      {Array.from(groups.entries()).sort(([a], [b]) => order.indexOf(a) - order.indexOf(b)).map(([cat, items]) => (
         <Command.Group
           key={cat}
           heading={GROUP_LABELS[cat]}
-          className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:opacity-50"
+          className="[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-[var(--ink-faint)]"
         >
           {items.map((cmd) => (
-            <CommandItem key={cmd.id} cmd={cmd} onSelect={onSelect} />
+            <CommandItem key={cmd.id} cmd={{ ...cmd, shortcut: ++number <= 9 ? String(number) : cmd.shortcut }} onSelect={onSelect} />
           ))}
         </Command.Group>
       ))}

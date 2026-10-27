@@ -13,25 +13,26 @@ export function CommandItem({ cmd, onSelect }: Props): JSX.Element {
   const kw = (cmd.keywords ?? []).join(' ')
   return (
     <Command.Item
+      data-command-id={cmd.id}
       value={`${cmd.title} ${cmd.subtitle ?? ''} ${kw} ${titleInitials}`}
       onSelect={() => onSelect(cmd)}
-      className="flex cursor-pointer items-center gap-3 border-2 border-transparent px-3 py-2.5 text-sm data-[selected=true]:border-[var(--line)] data-[selected=true]:bg-[var(--primary-soft)]"
+      className="group flex h-11 cursor-pointer items-center gap-3 rounded-[10px] px-2.5 text-[13.5px] transition-colors duration-150 data-[selected=true]:bg-[var(--primary-soft)] data-[selected=true]:shadow-[inset_0_0_0_1px_var(--blue-line)]"
     >
       {Icon ? (
-        <span className="cv-icon-slot !h-8 !w-8">
-          <Icon className="h-4 w-4" strokeWidth={2.25} />
+        <span className="cv-icon-slot !h-7 !w-7">
+          <Icon className="h-[14px] w-[14px]" strokeWidth={1.75} />
         </span>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="font-body truncate font-semibold text-foreground">{cmd.title}</span>
+        <span className="truncate text-[var(--ink)]">{cmd.title}</span>
         {cmd.subtitle ? (
-          <span className="font-mono truncate text-[10px] text-muted-foreground">
+          <span className="truncate text-[11.5px] text-[var(--ink-faint)]">
             {cmd.subtitle}
           </span>
         ) : null}
       </div>
       {cmd.shortcut ? (
-        <kbd className="cv-badge ml-2 font-mono text-[10px]">{cmd.shortcut}</kbd>
+        <kbd className="cv-kbd ml-2 opacity-60 group-data-[selected=true]:opacity-100">{cmd.shortcut}</kbd>
       ) : null}
     </Command.Item>
   )
