@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClipVault · v3 交互原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sans:"Geist","PingFang SC","Microsoft YaHei UI",system-ui,sans-serif;
+  --mono:"Geist Mono","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);
+}
+[data-theme=light]{
+  --canvas:#EEEEEC;--surface:#FFFFFF;--sunken:#F7F7F5;--hover:rgba(24,24,27,.045);--active:rgba(24,24,27,.075);
+  --line:rgba(24,24,27,.08);--line-2:rgba(24,24,27,.14);
+  --fg:#18181B;--fg-2:#5B5B63;--fg-3:#97979F;
+  --ink:#18181B;--on-ink:#FAFAF9;
+  --accent:#2F6BF0;--accent-soft:rgba(47,107,240,.10);
+  --ok:#159A62;--ok-soft:rgba(21,154,98,.10);--warn:#C47A0A;--warn-soft:rgba(196,122,10,.09);--bad:#D93D45;--bad-soft:rgba(217,61,69,.08);
+  --shadow:0 1px 0 rgba(24,24,27,.04),0 12px 32px -12px rgba(24,24,27,.12);
+  --shadow-pop:0 0 0 1px rgba(24,24,27,.06),0 24px 64px -16px rgba(24,24,27,.28);
+  --scrim:rgba(238,238,236,.55);
+}
+[data-theme=dark]{
+  --canvas:#0E0E10;--surface:#18181B;--sunken:#131316;--hover:rgba(250,250,249,.05);--active:rgba(250,250,249,.08);
+  --line:rgba(250,250,249,.07);--line-2:rgba(250,250,249,.13);
+  --fg:#F4F4F2;--fg-2:#A6A6AE;--fg-3:#6C6C75;
+  --ink:#F4F4F2;--on-ink:#18181B;
+  --accent:#5B8BFF;--accent-soft:rgba(91,139,255,.14);
+  --ok:#3CCB8A;--ok-soft:rgba(60,203,138,.12);--warn:#E8A33A;--warn-soft:rgba(232,163,58,.10);--bad:#F0626A;--bad-soft:rgba(240,98,106,.10);
+  --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 16px 40px -16px rgba(0,0,0,.6);
+  --shadow-pop:0 0 0 1px rgba(255,255,255,.08),0 32px 80px -16px rgba(0,0,0,.75);
+  --scrim:rgba(14,14,16,.55);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font:400 14px/1.6 var(--sans);color:var(--fg);background:var(--canvas);-webkit-font-smoothing:antialiased;overflow:hidden;transition:background .4s var(--ease),color .4s var(--ease)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+kbd{font:500 11px/1 var(--mono);color:var(--fg-3);padding:3px 5px;border-radius:5px;background:var(--sunken);box-shadow:inset 0 -1px 0 var(--line-2),0 0 0 1px var(--line)}
+
+/* ---------- shell ---------- */
+.app{height:100dvh;display:grid;grid-template-columns:248px minmax(0,1fr);padding:10px 10px 10px 0}
+.side{display:flex;flex-direction:column;padding:8px 12px 10px 14px;min-height:0}
+.brand{display:flex;align-items:center;gap:10px;height:40px;padding:0 6px}
+.logo{width:22px;height:22px;border-radius:7px;background:var(--ink);position:relative;overflow:hidden}
+.logo::before{content:"";position:absolute;inset:5px 5px 9px 9px;border-radius:3px;background:var(--canvas);transition:background .4s}
+.logo::after{content:"";position:absolute;inset:9px 9px 5px 5px;border-radius:3px;border:1.6px solid var(--canvas);transition:border-color .4s}
+.brand b{font-weight:600;letter-spacing:-.01em}
+.cmdk{margin:10px 0 14px;display:flex;align-items:center;gap:8px;height:36px;padding:0 8px 0 11px;border-radius:10px;background:var(--surface);box-shadow:var(--shadow);color:var(--fg-3);font-size:13px;transition:transform .25s var(--ease),box-shadow .25s}
+.cmdk:hover{transform:translateY(-1px)}
+.cmdk span{flex:1;text-align:left}
+.nav{display:flex;flex-direction:column;gap:2px;position:relative}
+.nav .glide{position:absolute;left:0;right:0;height:34px;border-radius:9px;background:var(--active);transition:transform .45s var(--spring);z-index:0}
+.ni{position:relative;z-index:1;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:9px;color:var(--fg-2);transition:color .2s}
+.ni:hover{color:var(--fg)} .ni.on{color:var(--fg);font-weight:500}
+.ni .n{margin-left:auto;font:500 11.5px var(--mono);color:var(--fg-3)}
+.ni .badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:#fff;font:600 11px/18px var(--mono);text-align:center}
+.sect{margin:22px 10px 6px;font-size:12px;color:var(--fg-3);display:flex;justify-content:space-between}
+.ses{display:flex;flex-direction:column;gap:1px;overflow:auto;min-height:0}
+.se{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:9px;color:var(--fg-2);font-size:13px;white-space:nowrap;transition:background .2s}
+.se:hover{background:var(--hover)} .se.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.se .t{overflow:hidden;text-overflow:ellipsis;flex:1}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.run{background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:breathe 2s var(--ease) infinite}
+.dot.wait{background:var(--warn)} .dot.done{background:var(--ok)} .dot.idle{background:transparent;box-shadow:inset 0 0 0 1.5px var(--fg-3)}
+@keyframes breathe{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:10px 6px 0;border-top:1px solid var(--line)}
+.model{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:32px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--fg-2)}
+.model:hover{background:var(--hover)}
+.model b{font:500 12.5px var(--mono);color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--fg-2)}
+.iconbtn:hover{background:var(--hover);color:var(--fg)}
+
+/* ---------- main panel ---------- */
+.panel{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);min-height:0;position:relative;overflow:hidden;transition:background .4s var(--ease)}
+.view{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transform:translateY(8px) scale(.995);pointer-events:none;transition:opacity .35s var(--ease),transform .5s var(--ease)}
+.view.on{opacity:1;transform:none;pointer-events:auto}
+.bar{display:flex;align-items:center;gap:12px;height:52px;padding:0 18px 0 22px;border-bottom:1px solid var(--line);flex:none}
+.bar h1{font-size:14px;font-weight:500;letter-spacing:-.01em}
+.bar .sub{color:var(--fg-3);font-size:13px}
+.bar .grow{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:7px;background:var(--sunken);font-size:12px;color:var(--fg-2);box-shadow:inset 0 0 0 1px var(--line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:500;transition:transform .15s var(--ease),background .2s,box-shadow .2s}
+.btn:active{transform:scale(.97)}
+.btn.ghost{color:var(--fg-2)} .btn.ghost:hover{background:var(--hover);color:var(--fg)}
+.btn.line{box-shadow:inset 0 0 0 1px var(--line-2);color:var(--fg)} .btn.line:hover{background:var(--hover)}
+.btn.ink{background:var(--ink);color:var(--on-ink)} .btn.ink:hover{opacity:.9}
+.btn kbd{background:transparent;box-shadow:none;color:inherit;opacity:.55;padding:0}
+
+/* ---------- session ---------- */
+.feed{flex:1;overflow:auto;scroll-behavior:smooth}
+.col{max-width:720px;margin:0 auto;padding:36px 32px 200px}
+.msg{opacity:0;transform:translateY(10px);animation:rise .7s var(--ease) forwards;animation-delay:calc(var(--d,0) * 1ms)}
+@keyframes rise{to{opacity:1;transform:none}}
+.you{display:flex;justify-content:flex-end;margin-bottom:28px}
+.you .bubble{max-width:82%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);line-height:1.7}
+.ref{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;margin:0 2px;border-radius:6px;background:var(--surface);box-shadow:0 0 0 1px var(--line-2);font-size:12.5px;vertical-align:1px;transition:transform .2s var(--ease)}
+.ref:hover{transform:translateY(-1px)}
+.ref .m{color:var(--fg-3);font:11.5px var(--mono)}
+.ai{margin-bottom:22px}
+.ai .who{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--fg-3)}
+.ai .who .av{width:20px;height:20px;border-radius:6px;background:var(--ink);display:grid;place-items:center}
+.ai .who .av::after{content:"";width:6px;height:6px;border-radius:2px;background:var(--canvas)}
+.ai p{font-size:15px;line-height:1.75;letter-spacing:-.003em}
+code{font:13px var(--mono);padding:1px 6px;border-radius:5px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line)}
+.steps{margin:14px 0 4px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.steps summary{list-style:none;display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;cursor:pointer;font-size:13px;color:var(--fg-2)}
+.steps summary::-webkit-details-marker{display:none}
+.steps summary .chev{transition:transform .3s var(--ease)} .steps[open] summary .chev{transform:rotate(90deg)}
+.steps summary .grow{flex:1} .steps .tm{font:12px var(--mono);color:var(--fg-3)}
+.steps ol{list-style:none;padding:2px 14px 12px 40px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--fg-2)}
+.steps li{display:flex;gap:10px} .steps li span:first-child{font-family:var(--mono);color:var(--fg)}
+.shimmer{background:linear-gradient(90deg,var(--fg-3) 0%,var(--fg) 40%,var(--fg-3) 80%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.8s linear infinite}
+@keyframes shine{from{background-position:150% 0}to{background-position:-50% 0}}
+.caret::after{content:"";display:inline-block;width:2px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--fg);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ask */
+.ask{margin:16px 0;padding:16px;border-radius:14px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line)}
+.ask .q{font-weight:500;margin-bottom:12px}
+.opts{display:flex;gap:8px;flex-wrap:wrap}
+.opt{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 8px;border-radius:9px;background:var(--surface);box-shadow:0 0 0 1px var(--line-2);font-size:13px;transition:box-shadow .2s,transform .2s var(--ease)}
+.opt:hover{transform:translateY(-1px)}
+.opt.sel{box-shadow:0 0 0 1.5px var(--accent);background:var(--accent-soft)}
+
+/* approval */
+.gate{margin:16px 0;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-pop);overflow:hidden;transform-origin:top center;animation:pop .7s var(--spring) both;animation-delay:calc(var(--d,0) * 1ms)}
+@keyframes pop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+.gate .h{display:flex;align-items:center;gap:10px;padding:12px 14px 12px 16px}
+.gate .h .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--warn-soft);color:var(--warn)}
+.gate .h .tt{font-weight:500} .gate .h .pth{font:12.5px var(--mono);color:var(--fg-2)}
+.gate .h .grow{flex:1}
+.ring{width:22px;height:22px} .ring circle{fill:none;stroke-width:2.2}
+.ring .bg{stroke:var(--line-2)} .ring .fg{stroke:var(--warn);stroke-linecap:round;stroke-dasharray:56.5;stroke-dashoffset:0;transform:rotate(-90deg);transform-origin:center;animation:drain 300s linear forwards}
+@keyframes drain{to{stroke-dashoffset:56.5}}
+.diff{font:12.5px/1.8 var(--mono);background:var(--sunken);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px 0;overflow:hidden}
+.dl{display:grid;grid-template-columns:40px 20px minmax(0,1fr);padding-right:16px;white-space:pre}
+.dl .g{text-align:right;padding-right:12px;color:var(--fg-3)} .dl .s{color:var(--fg-3)}
+.dl.a{background:var(--ok-soft)} .dl.a .s,.dl.a .c{color:var(--ok)}
+.dl.d{background:var(--bad-soft)} .dl.d .s,.dl.d .c{color:var(--bad)}
+.gate .f{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px}
+.gate .f .note{flex:1;font-size:12.5px;color:var(--fg-3)}
+.gate.done{animation:none}
+.collapsed{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;margin:16px 0;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line);font-size:13px;color:var(--fg-2);animation:rise .5s var(--ease)}
+.check{width:18px;height:18px;border-radius:50%;background:var(--ok);display:grid;place-items:center}
+.check svg{width:11px;height:11px;stroke:#fff;stroke-width:2.6;fill:none;stroke-dasharray:20;stroke-dashoffset:20;animation:draw .5s .15s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.verify{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--fg-2);animation:rise .6s var(--ease) both}
+.verify b{color:var(--ok);font-weight:500}
+
+/* composer */
+.dock{position:absolute;left:0;right:0;bottom:0;padding:0 32px 22px;background:linear-gradient(transparent,var(--surface) 38%);pointer-events:none}
+.composer{pointer-events:auto;max-width:720px;margin:0 auto;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);position:relative;isolation:isolate}
+.composer::before{content:"";position:absolute;inset:-1px;border-radius:17px;padding:1px;background:conic-gradient(from var(--a),transparent 0 70%,var(--accent) 85%,transparent 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .4s;animation:spin 3.2s linear infinite;z-index:-1}
+.composer.busy::before{opacity:1}
+@property --a{syntax:"<angle>";initial-value:0deg;inherits:false}
+@keyframes spin{to{--a:360deg}}
+.composer textarea{display:block;width:100%;min-height:52px;max-height:160px;resize:none;border:0;outline:0;background:transparent;font:15px/1.6 var(--sans);color:var(--fg);padding:14px 16px 4px}
+.composer textarea::placeholder{color:var(--fg-3)}
+.composer .tb{display:flex;align-items:center;gap:4px;padding:6px 8px 8px 10px}
+.composer .tb .grow{flex:1}
+.send{width:32px;height:32px;border-radius:9px;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;transition:transform .2s var(--spring)}
+.send:hover{transform:scale(1.06)} .send:active{transform:scale(.94)}
+.mention{position:absolute;left:12px;bottom:calc(100% + 8px);width:400px;padding:6px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-pop);opacity:0;transform:translateY(6px) scale(.98);transform-origin:bottom left;pointer-events:none;transition:opacity .25s var(--ease),transform .35s var(--spring)}
+.mention.on{opacity:1;transform:none;pointer-events:auto}
+
+/* ---------- clipboard view ---------- */
+.split{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:0}
+.list{overflow:auto;padding:8px 10px 24px;border-right:1px solid var(--line)}
+.filters{display:flex;gap:6px;padding:14px 22px 6px;flex:none;flex-wrap:wrap}
+.fl{height:28px;padding:0 11px;border-radius:8px;font-size:12.5px;color:var(--fg-2);box-shadow:inset 0 0 0 1px var(--line);transition:all .2s}
+.fl:hover{color:var(--fg)} .fl.on{background:var(--ink);color:var(--on-ink);box-shadow:none}
+.day{font-size:12px;color:var(--fg-3);padding:14px 12px 6px}
+.ci{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 12px;border-radius:10px;transition:background .2s;opacity:0;animation:rise .6s var(--ease) forwards;animation-delay:calc(var(--i) * 45ms)}
+.ci:hover{background:var(--hover)} .ci.on{background:var(--accent-soft)}
+.ci .ty{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);color:var(--fg-2)}
+.ci .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:13px var(--mono)}
+.ci .tx.sans{font-family:var(--sans)}
+.ci .meta{font-size:12px;color:var(--fg-3);display:flex;gap:6px}
+.ci .r{display:flex;align-items:center;gap:8px;font:12px var(--mono);color:var(--fg-3)}
+.ci .k{opacity:0;transition:opacity .2s} .ci:hover .k,.ci.on .k{opacity:1}
+.pv{display:flex;flex-direction:column;min-height:0}
+.pv .code{flex:1;margin:18px;padding:16px;border-radius:12px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);font:12.5px/1.8 var(--mono);white-space:pre;overflow:auto;color:var(--fg)}
+.pv .code .kw{color:var(--accent)} .pv .code .cm{color:var(--fg-3)}
+.pv .meta{padding:0 22px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px}
+.pv .meta dt{color:var(--fg-3)} .pv .meta dd{text-align:right}
+.pv .act{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:18px 18px 18px}
+
+/* ---------- resources view ---------- */
+.res-wrap{flex:1;overflow:auto;padding:28px 32px}
+.res-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;max-width:1040px}
+.card{border-radius:16px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.03);padding:20px;position:relative;overflow:hidden;opacity:0;animation:rise .7s var(--ease) forwards;animation-delay:calc(var(--i) * 80ms)}
+.card::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(240px circle at var(--mx,-200px) var(--my,-200px),color-mix(in srgb,var(--accent) 9%,transparent),transparent 70%);opacity:0;transition:opacity .3s}
+.card:hover::after{opacity:1}
+.card h3{font-size:16px;font-weight:500;letter-spacing:-.01em}
+.card .sub{color:var(--fg-3);font-size:13px;margin-top:2px}
+.fields{margin-top:18px;display:flex;flex-direction:column}
+.fd{display:grid;grid-template-columns:72px minmax(0,1fr) auto;align-items:center;gap:12px;height:46px;border-top:1px solid var(--line)}
+.fd .l{font-size:12.5px;color:var(--fg-3)} .fd .v{font:13.5px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd .v.mask{letter-spacing:.25em;color:var(--fg-2)}
+.copy{height:28px;padding:0 10px;border-radius:7px;font-size:12.5px;color:var(--fg-2);box-shadow:inset 0 0 0 1px var(--line-2);display:inline-flex;align-items:center;gap:6px;transition:all .2s}
+.copy:hover{color:var(--fg);background:var(--hover)}
+.copy.ok{color:var(--ok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ok) 40%,transparent)}
+.totp{display:flex;align-items:center;gap:16px;margin-top:18px;padding:14px 16px;border-radius:12px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line)}
+.totp .code{font:500 28px/1 var(--mono);letter-spacing:.06em}
+.totp .code span{display:inline-block;transition:transform .5s var(--spring),opacity .3s}
+.tring{width:36px;height:36px;margin-left:auto} .tring circle{fill:none;stroke-width:3}
+.tring .bg{stroke:var(--line-2)} .tring .fg{stroke:var(--ink);stroke-linecap:round;stroke-dasharray:94.2;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s linear}
+.seq{margin-top:16px;display:flex;gap:8px}
+.seq .btn{flex:1}
+.mini{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line);font-size:13.5px}
+.mini:first-of-type{border-top:0}
+.mini .ty{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);color:var(--fg-2)}
+.mini .s{color:var(--fg-3);font-size:12px}
+.tag{font-size:11.5px;padding:2px 7px;border-radius:6px;background:var(--sunken);color:var(--fg-2);box-shadow:inset 0 0 0 1px var(--line)}
+.tag.warn{background:var(--warn-soft);color:var(--warn);box-shadow:none}
+.intake{margin-top:16px;border-radius:16px;box-shadow:inset 0 0 0 1px var(--line);padding:16px;background:var(--sunken)}
+.intake textarea{width:100%;height:84px;resize:none;border:0;outline:0;background:transparent;font:13px/1.7 var(--mono);color:var(--fg)}
+.intake .row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.intake input{flex:1;height:34px;border-radius:9px;border:0;outline:0;padding:0 12px;background:var(--surface);box-shadow:0 0 0 1px var(--line-2);font:13px var(--sans);color:var(--fg)}
+.intake input:focus{box-shadow:0 0 0 2px var(--accent)}
+
+/* ---------- island ---------- */
+.island{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:30;height:36px;width:36px;border-radius:18px;background:#111113;color:#F4F4F2;display:flex;align-items:center;gap:10px;padding:0 6px;overflow:hidden;box-shadow:0 10px 30px -8px rgba(0,0,0,.45);opacity:0;transition:width .6s var(--spring),opacity .25s,transform .6s var(--spring)}
+.island.show{opacity:1;width:440px}
+.island .ico{width:24px;height:24px;border-radius:12px;background:#2a2a2e;display:grid;place-items:center;flex:none}
+.island .txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:12.5px var(--mono);opacity:0;transition:opacity .3s .2s}
+.island.show .txt,.island.show .ik{opacity:1}
+.island .ik{display:flex;gap:6px;align-items:center;font-size:12px;color:#a6a6ae;opacity:0;transition:opacity .3s .25s;white-space:nowrap;padding-right:6px}
+.island kbd{background:#2a2a2e;box-shadow:none;color:#d4d4d8}
+
+/* ---------- palette ---------- */
+.scrim{position:fixed;inset:0;z-index:40;background:var(--scrim);backdrop-filter:blur(6px) saturate(1.1);opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
+.scrim.on{opacity:1;pointer-events:auto}
+.pal{position:fixed;z-index:41;left:50%;top:14vh;width:720px;max-width:calc(100vw - 40px);transform:translateX(-50%) scale(.96);opacity:0;pointer-events:none;border-radius:18px;background:var(--surface);box-shadow:var(--shadow-pop);overflow:hidden;transition:transform .45s var(--spring),opacity .25s var(--ease)}
+.pal.on{transform:translateX(-50%) scale(1);opacity:1;pointer-events:auto}
+.pal .in{display:flex;align-items:center;gap:12px;height:58px;padding:0 18px;border-bottom:1px solid var(--line)}
+.pal .in input{flex:1;border:0;outline:0;background:transparent;font:17px var(--sans);color:var(--fg)}
+.pal .in input::placeholder{color:var(--fg-3)}
+.pal .body{display:grid;grid-template-columns:minmax(0,1fr) 280px;height:380px}
+.pal .rs{overflow:auto;padding:6px;position:relative;border-right:1px solid var(--line)}
+.pal .gh{font-size:12px;color:var(--fg-3);padding:10px 12px 4px}
+.pr{position:relative;z-index:1;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;height:44px;padding:0 10px;border-radius:10px;font-size:13.5px}
+.pr .ty{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);color:var(--fg-2)}
+.pr .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .tx.m{font-family:var(--mono);font-size:13px}
+.pr .r{font:12px var(--mono);color:var(--fg-3)}
+.pal .hl{position:absolute;left:6px;right:6px;height:44px;border-radius:10px;background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent);transition:transform .32s var(--spring);z-index:0}
+.pal .side-pv{padding:16px;display:flex;flex-direction:column;gap:12px;font-size:12.5px;color:var(--fg-2)}
+.pal .side-pv pre{flex:1;margin:0;padding:12px;border-radius:10px;background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);font:12px/1.7 var(--mono);white-space:pre-wrap;color:var(--fg);overflow:hidden}
+.pal .ft{display:flex;align-items:center;gap:16px;height:42px;padding:0 16px;border-top:1px solid var(--line);font-size:12px;color:var(--fg-3);background:var(--sunken)}
+.pal .ft .grow{flex:1}
+.pal .ft span{display:inline-flex;align-items:center;gap:6px}
+
+.dev{position:fixed;left:14px;bottom:62px;z-index:50;display:flex;gap:6px;padding:6px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-pop)}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:10px;border:3px solid var(--surface)}::-webkit-scrollbar-track{background:transparent}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-5 4v-4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="3"/><path d="M9 4.5h6M9 11h6M9 15h4"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13 6.5 5h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8.5" cy="15.5" r="4.5"/><path d="m12 12 8-8M17 7l2.5 2.5M15 9l2 2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M15.5 12v1.5a2.5 2.5 0 0 0 5 0V12a8.5 8.5 0 1 0-3.4 6.8"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24"><rect x="7" y="8" width="10" height="12" rx="5"/><path d="M12 8V5M9 5.5 10 7M15 5.5 14 7M4 13h3M17 13h3M5 18l2.3-1.5M19 18l-2.3-1.5"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m7 10 3 2-3 2M13 15h4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><path d="M9 4h6v3H9z"/><path d="M15 5.5h2a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+</svg>
+
+<div class="island" id="island"><span class="ico"><svg class="i" style="width:13px;height:13px"><use href="#i-clip"/></svg></span><span class="txt" id="islandTxt">TypeError: Cannot read properties of undefined (reading 'token')</span><span class="ik"><kbd>Alt</kbd><kbd>Space</kbd></span></div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo"></span><b>ClipVault</b></div>
+    <button class="cmdk" onclick="openPal()"><svg class="i"><use href="#i-search"/></svg><span>搜索或提问</span><kbd>Alt Space</kbd></button>
+    <nav class="nav" id="nav">
+      <div class="glide" id="glide"></div>
+      <button class="ni on" data-view="session"><svg class="i"><use href="#i-chat"/></svg>会话</button>
+      <button class="ni" data-view="clip"><svg class="i"><use href="#i-clip"/></svg>剪贴板<span class="n">1,284</span></button>
+      <button class="ni" data-view="inbox"><svg class="i"><use href="#i-inbox"/></svg>收件箱<span class="badge">3</span></button>
+      <button class="ni" data-view="res"><svg class="i"><use href="#i-key"/></svg>账号与密钥<span class="n">23</span></button>
+    </nav>
+    <div class="sect"><span>payment-api</span><button title="新会话"><svg class="i" style="width:14px;height:14px"><use href="#i-plus"/></svg></button></div>
+    <div class="ses">
+      <div class="se on"><span class="dot wait"></span><span class="t">修复登录重试</span></div>
+      <div class="se"><span class="dot run"></span><span class="t">补充接口测试</span></div>
+      <div class="se"><span class="dot done"></span><span class="t">升级 axios 到 1.8</span></div>
+    </div>
+    <div class="sect"><span>blog-site</span></div>
+    <div class="ses"><div class="se"><span class="dot idle"></span><span class="t">迁移图片 CDN</span></div></div>
+    <div class="foot">
+      <button class="model"><span class="dot done" style="width:6px;height:6px"></span><b>gpt-6-astra</b><span style="color:var(--fg-3)">· caowo</span></button>
+      <button class="iconbtn" title="设置"><svg class="i"><use href="#i-gear"/></svg></button>
+    </div>
+  </aside>
+
+  <main class="panel">
+    <!-- ================= SESSION ================= -->
+    <section class="view on" id="v-session">
+      <div class="bar"><h1>修复登录重试</h1><span class="sub">payment-api</span><span class="grow"></span>
+        <span class="chip mono"><span class="dot wait" style="width:6px;height:6px"></span>7 / 30 次</span>
+        <button class="btn ghost"><svg class="i"><use href="#i-stop"/></svg>停止</button>
+      </div>
+      <div class="feed" id="feed"><div class="col" id="col">
+        <div class="you msg" style="--d:80"><div class="bubble">登录失败后不会重试，看下 <span class="ref"><svg class="i" style="width:13px;height:13px"><use href="#i-bug"/></svg>报错堆栈<span class="m">2m</span></span> 修掉，再用 <span class="ref"><svg class="i" style="width:13px;height:13px"><use href="#i-key"/></svg>支付后台 · staging</span> 验证。</div></div>
+
+        <div class="ai msg" style="--d:420">
+          <div class="who"><span class="av"></span>助手</div>
+          <details class="steps"><summary><svg class="i chev"><use href="#i-chev"/></svg><span id="stepLabel" class="shimmer">正在读取 auth/login.ts</span><span class="grow"></span><span class="tm" id="stepTime">0.0s</span></summary>
+            <ol><li><span>读取</span><span>auth/login.ts · auth/retry.ts · login.test.ts</span></li><li><span>搜索</span><span>剪贴板 “TypeError token”</span></li><li><span>子任务</span><span>只读检查 3 处调用点</span></li></ol></details>
+          <p id="answer" class="caret"></p>
+        </div>
+        <div id="after"></div>
+      </div></div>
+
+      <div class="dock"><div class="composer" id="composer">
+        <div class="mention" id="mention">
+          <div class="pal-gh" style="font-size:12px;color:var(--fg-3);padding:8px 10px 4px">最近复制</div>
+          <div class="pr" style="background:var(--accent-soft)"><span class="ty"><svg class="i"><use href="#i-bug"/></svg></span><span class="tx m">TypeError: Cannot read properties…</span><span class="r">2m</span></div>
+          <div class="pr"><span class="ty"><svg class="i"><use href="#i-term"/></svg></span><span class="tx m">npm test -- --grep retry</span><span class="r">8m</span></div>
+          <div class="pr"><span class="ty"><svg class="i"><use href="#i-link"/></svg></span><span class="tx m">admin.example.test/login</span><span class="r">12m</span></div>
+        </div>
+        <textarea id="ta" rows="1" placeholder="继续说，或输入 @ 引用剪贴板与资源"></textarea>
+        <div class="tb">
+          <button class="btn ghost" style="height:30px;padding:0 9px" onclick="toggleMention()"><svg class="i"><use href="#i-at"/></svg>引用</button>
+          <button class="btn ghost" style="height:30px;padding:0 9px"><svg class="i"><use href="#i-file"/></svg>附件</button>
+          <span class="grow"></span>
+          <span class="chip" style="height:24px">逐次确认</span>
+          <button class="send" aria-label="发送"><svg class="i" style="stroke-width:2"><use href="#i-up"/></svg></button>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ================= CLIPBOARD ================= -->
+    <section class="view" id="v-clip">
+      <div class="bar"><h1>剪贴板</h1><span class="sub">本机加密 · 不发给模型</span><span class="grow"></span><span class="chip"><span class="dot run" style="width:6px;height:6px"></span>监听中</span></div>
+      <div class="filters" id="filters"><button class="fl on">全部</button><button class="fl">代码</button><button class="fl">报错</button><button class="fl">命令</button><button class="fl">链接</button><button class="fl">图片</button><button class="fl">置顶</button></div>
+      <div class="split">
+        <div class="list" id="cliplist"></div>
+        <div class="pv">
+          <pre class="code" id="pvcode"></pre>
+          <dl class="meta" id="pvmeta"></dl>
+          <div class="act"><button class="btn ink"><svg class="i"><use href="#i-paste"/></svg>粘贴到上一个窗口 <kbd>↵</kbd></button><button class="btn line"><svg class="i"><use href="#i-chat"/></svg>问助手</button><button class="btn line" title="复制"><svg class="i"><use href="#i-copy"/></svg></button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= INBOX ================= -->
+    <section class="view" id="v-inbox">
+      <div class="bar"><h1>收件箱</h1><span class="sub">本机识别，未调用模型</span></div>
+      <div class="res-wrap"><div style="max-width:720px">
+        <div class="card" style="--i:0"><div class="mini" style="border:0;padding:0"><span class="ty"><svg class="i"><use href="#i-bug"/></svg></span><div><div>复制了一段报错，来自 payment-api</div><div class="s mono">TypeError: Cannot read properties of undefined (reading 'token')</div></div><button class="btn ink">开会话修复</button></div></div>
+        <div style="height:10px"></div>
+        <div class="card" style="--i:1"><div class="mini" style="border:0;padding:0"><span class="ty"><svg class="i"><use href="#i-key"/></svg></span><div><div>像是一组账号资料 · 3 个字段</div><div class="s">地址 · 用户名 · 密码（已遮罩）</div></div><button class="btn line">存为资源</button></div></div>
+        <div style="height:10px"></div>
+        <div class="card" style="--i:2"><div class="mini" style="border:0;padding:0"><span class="ty"><svg class="i"><use href="#i-shield"/></svg></span><div><div>这个密钥与“DeepSeek 正式”重复</div><div class="s">剪贴板里还留着原文，建议清除</div></div><button class="btn line">清除</button></div></div>
+      </div></div>
+    </section>
+
+    <!-- ================= RESOURCES ================= -->
+    <section class="view" id="v-res">
+      <div class="bar"><h1>账号与密钥</h1><span class="sub">密钥只进不出，模型只看得到名字</span><span class="grow"></span><button class="btn ink"><svg class="i"><use href="#i-plus"/></svg>新建</button></div>
+      <div class="res-wrap"><div class="res-grid">
+        <div class="card spot" style="--i:0">
+          <div style="display:flex;align-items:flex-start;gap:12px"><div><h3>支付后台 · staging</h3><div class="sub">payment-api · 测试账号 · 2 天前用过</div></div><span class="grow" style="flex:1"></span><span class="tag">账号</span></div>
+          <div class="fields">
+            <div class="fd"><span class="l">登录页</span><span class="v">admin.example.test/login</span><button class="copy"><svg class="i" style="width:14px;height:14px"><use href="#i-globe"/></svg>打开</button></div>
+            <div class="fd"><span class="l">用户名</span><span class="v">payment-ops</span><button class="copy" onclick="copied(this)"><svg class="i" style="width:14px;height:14px"><use href="#i-copy"/></svg>复制</button></div>
+            <div class="fd"><span class="l">密码</span><span class="v mask">••••••••••</span><button class="copy" onclick="copied(this)"><svg class="i" style="width:14px;height:14px"><use href="#i-copy"/></svg>复制</button></div>
+          </div>
+          <div class="totp"><div><div style="font-size:12px;color:var(--fg-3);margin-bottom:6px">验证码</div><div class="code" id="totp">482 917</div></div>
+            <svg class="tring" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"/><circle class="fg" id="tring" cx="18" cy="18" r="15"/></svg><span class="mono" id="tsec" style="font-size:12px;color:var(--fg-3);width:26px">30s</span></div>
+          <div class="seq"><button class="btn ink" onclick="island('依次粘贴：用户名 → 密码 → 验证码', 'Alt Shift V 下一项')"><svg class="i"><use href="#i-play"/></svg>依次粘贴</button><button class="btn line">辅助登录</button></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="--i:1;padding:6px 20px">
+            <div class="mini"><span class="ty"><svg class="i"><use href="#i-key"/></svg></span><div><div>短信服务 API</div><div class="s">payment-api · API Key</div></div><span class="tag">接口</span></div>
+            <div class="mini"><span class="ty"><svg class="i"><use href="#i-lock"/></svg></span><div><div>DeepSeek 正式</div><div class="s">模型服务 · 89 天未轮换</div></div><span class="tag warn">待轮换</span></div>
+            <div class="mini"><span class="ty"><svg class="i"><use href="#i-globe"/></svg></span><div><div>阿里云控制台</div><div class="s">个人 · 账号</div></div><span class="tag">账号</span></div>
+          </div>
+          <div class="card" style="--i:2">
+            <h3 style="font-size:14px">新建资源</h3><div class="sub">随便粘贴一段，本机拆好字段，AI 只看格式不看值</div>
+            <div class="intake"><textarea>网址: https://crm.example.test
+账号: sales-lead
+密码: ****************</textarea>
+              <div class="row"><input placeholder="这是做什么用的？例如：CRM 测试账号"><button class="btn ink">整理</button></div></div>
+          </div>
+        </div>
+      </div></div>
+    </section>
+  </main>
+</div>
+
+<!-- palette -->
+<div class="scrim" id="scrim" onclick="closePal()"></div>
+<div class="pal" id="pal" role="dialog" aria-label="快速粘贴">
+  <div class="in"><svg class="i" style="width:18px;height:18px;color:var(--fg-3)"><use href="#i-search"/></svg><input id="palIn" placeholder="搜索剪贴板、账号，或直接提问…"><kbd>Esc</kbd></div>
+  <div class="body">
+    <div class="rs" id="palList"><div class="hl" id="hl"></div></div>
+    <div class="side-pv"><pre id="palPv"></pre><div id="palMeta" style="display:flex;justify-content:space-between"></div></div>
+  </div>
+  <div class="ft"><span><kbd>↑</kbd><kbd>↓</kbd>选择</span><span><kbd>↵</kbd>粘贴</span><span><kbd>Tab</kbd>问助手</span><span><kbd>1</kbd>–<kbd>9</kbd>直接粘贴</span><span class="grow"></span><span>ClipVault</span></div>
+</div>
+
+<div class="dev">
+  <button class="btn ghost" onclick="island()">模拟复制</button>
+  <button class="btn ghost" onclick="openPal()">快速粘贴</button>
+  <button class="btn ghost" onclick="toggleTheme()"><svg class="i"><use href="#i-sun"/></svg></button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s)
+/* ---- nav glide + views ---- */
+const nav=$('#nav'),glide=$('#glide')
+function moveGlide(el){glide.style.transform=`translateY(${el.offsetTop}px)`}
+nav.querySelectorAll('.ni').forEach(b=>b.addEventListener('click',()=>{
+  nav.querySelectorAll('.ni').forEach(x=>x.classList.toggle('on',x===b));moveGlide(b)
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.view))
+  if(b.dataset.view==='clip')renderClips()
+}))
+requestAnimationFrame(()=>moveGlide(nav.querySelector('.ni.on')))
+function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='light'?'dark':'light'}
+
+/* ---- session: process + streaming ---- */
+const steps=['正在读取 auth/login.ts','正在搜索剪贴板','子任务正在检查调用点','已完成 · 读取 3 个文件 · 搜索 1 次 · 子任务 1 个']
+let t0=performance.now(),si=0
+const stepLabel=$('#stepLabel'),stepTime=$('#stepTime')
+const clock=setInterval(()=>{stepTime.textContent=((performance.now()-t0)/1000).toFixed(1)+'s'},100)
+const stepTimer=setInterval(()=>{si++;stepLabel.textContent=steps[si];if(si===steps.length-1){clearInterval(stepTimer);clearInterval(clock);stepLabel.classList.remove('shimmer');stream()}},1100)
+const answer='原因在 <code>auth/login.ts</code>：<code>retryCount</code> 只在成功时重置，第一次失败后计数就满了。我会改成每次发起登录前重置，再补一条失败重试的测试。'
+const composer=$('#composer');composer.classList.add('busy')
+function stream(){
+  const el=$('#answer');const plain=answer.replace(/<[^>]+>/g,'');let i=0
+  const tick=setInterval(()=>{i+=2;el.textContent=plain.slice(0,i);if(i>=plain.length){clearInterval(tick);el.innerHTML=answer;el.classList.remove('caret');setTimeout(askCard,350)}},28)
+}
+function askCard(){
+  const a=$('#after');a.insertAdjacentHTML('beforeend',`<div class="ask msg"><div class="q">测试账号用哪个环境？</div><div class="opts"><button class="opt" onclick="pick(this)"><kbd>1</kbd>staging</button><button class="opt" onclick="pick(this)"><kbd>2</kbd>dev</button><button class="opt" style="color:var(--fg-3)">自己填写</button></div></div>`)
+  scrollDown()
+}
+function pick(b){b.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.toggle('sel',o===b));setTimeout(gateCard,450)}
+function gateCard(){
+  if($('#gate'))return
+  const rows=[['41',' ','async function login(input: LoginInput) {',''],['42','−','  if (retryCount >= MAX_RETRY) throw lastError','d'],['42','+','  retryCount = 0','a'],['43','+','  while (retryCount < MAX_RETRY) {','a'],['44','+','    try { return await request(input) }','a'],['45','+','    catch (error) { lastError = error; retryCount++ }','a'],['46','+','  }','a']]
+  $('#after').insertAdjacentHTML('beforeend',`<div class="gate" id="gate"><div class="h"><span class="ic"><svg class="i"><use href="#i-file"/></svg></span><div><div class="tt">写入文件</div><div class="pth">auth/login.ts</div></div><span class="grow"></span><span class="mono" style="font-size:12.5px"><span style="color:var(--ok)">+6</span> <span style="color:var(--bad)">−1</span></span><span class="mono" id="gateLeft" style="font-size:12px;color:var(--fg-3)">4:59</span><svg class="ring" viewBox="0 0 22 22" title="5 分钟内有效"><circle class="bg" cx="11" cy="11" r="9"/><circle class="fg" cx="11" cy="11" r="9"/></svg></div>
+  <div class="diff">${rows.map(r=>`<div class="dl ${r[3]}"><span class="g">${r[0]}</span><span class="s">${r[1]}</span><span class="c">${r[2].replace(/</g,'&lt;')}</span></div>`).join('')}</div>
+  <div class="f"><span class="note">只批准这一次写入</span><button class="btn ghost" onclick="decide(false)">拒绝 <kbd>Esc</kbd></button><button class="btn ink" onclick="decide(true)">允许 <kbd>⌘↵</kbd></button></div></div>`)
+  composer.classList.remove('busy');scrollDown()
+  let left=299;const t=setInterval(()=>{const el=document.getElementById('gateLeft');if(!el){clearInterval(t);return}left--;el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0')},1000)
+}
+function decide(ok){
+  const g=$('#gate');g.style.transition='opacity .25s, transform .35s var(--ease)';g.style.opacity=0;g.style.transform='scale(.98)'
+  setTimeout(()=>{g.outerHTML=ok?`<div class="collapsed"><span class="check"><svg viewBox="0 0 12 12"><path d="M2.5 6.2 5 8.5l4.5-5"/></svg></span>已写入 <code>auth/login.ts</code><span style="flex:1"></span><span class="mono" style="font-size:12px;color:var(--fg-3)">+6 −1</span></div>`:`<div class="collapsed">已拒绝，未写入</div>`
+    if(ok){composer.classList.add('busy');setTimeout(()=>{$('#after').insertAdjacentHTML('beforeend',`<div class="verify"><span class="check"><svg viewBox="0 0 12 12"><path d="M2.5 6.2 5 8.5l4.5-5"/></svg></span><b>12 项测试通过</b><span class="mono" style="color:var(--fg-3)">node --test · 2.4s · 沙箱内运行</span></div>`);composer.classList.remove('busy');scrollDown()},1400)}
+    scrollDown()},260)
+}
+function scrollDown(){const f=$('#feed');f.scrollTop=f.scrollHeight}
+document.addEventListener('keydown',e=>{
+  if((e.altKey&&e.code==='Space')){e.preventDefault();palOpen?closePal():openPal();return}
+  if(palOpen){palKey(e);return}
+  if($('#gate')&&(e.metaKey||e.ctrlKey)&&e.key==='Enter')decide(true)
+  if($('#gate')&&e.key==='Escape')decide(false)
+  const ask=$('.ask:not(.done)');if(ask&&(e.key==='1'||e.key==='2')&&document.activeElement!==$('#ta')){pick(ask.querySelectorAll('.opt')[+e.key-1]);ask.classList.add('done')}
+})
+function toggleMention(){$('#mention').classList.toggle('on')}
+$('#ta').addEventListener('input',e=>{$('#mention').classList.toggle('on',/@\S*$/.test(e.target.value))})
+
+/* ---- clipboard data ---- */
+const clips=[
+ {ic:'code',t:'retryCount = 0; while (retryCount < MAX_RETRY) {',m:'VS Code · 复制 3 次',r:'刚刚',body:'<span class="kw">let</span> retryCount = 0\n<span class="kw">while</span> (retryCount &lt; MAX_RETRY) {\n  <span class="kw">try</span> { <span class="kw">return await</span> request(input) }\n  <span class="kw">catch</span> (error) {\n    lastError = error\n    retryCount++\n  }\n}',src:'VS Code',prj:'payment-api',n:'3 次'},
+ {ic:'bug',t:"TypeError: Cannot read properties of undefined (reading 'token')",m:'Windows Terminal · payment-api',r:'2m',body:"TypeError: Cannot read properties of undefined (reading 'token')\n    <span class=\"cm\">at login (auth/login.ts:42:18)</span>\n    <span class=\"cm\">at retry (auth/retry.ts:17:9)</span>\n    <span class=\"cm\">at async Context.&lt;anonymous&gt; (login.test.ts:31)</span>",src:'Windows Terminal',prj:'payment-api',n:'1 次'},
+ {ic:'term',t:'npm test -- --grep retry',m:'Windows Terminal · 复制 5 次',r:'8m',body:'npm test -- --grep retry',src:'Windows Terminal',prj:'payment-api',n:'5 次'},
+ {ic:'link',t:'https://admin.example.test/login',m:'Arc',r:'12m',body:'https://admin.example.test/login',src:'Arc',prj:'payment-api',n:'2 次'},
+ {ic:'lock',t:'••••••••••••••',m:'疑似密钥 · 28 秒后自动清除',r:'14m',body:'内容已遮罩\n\n这是一段疑似 API Key 的内容，不会显示也不会发给模型。\n可以“存为资源”后通过名字引用。',src:'Chrome',prj:'—',n:'1 次',sans:true},
+ {ic:'img',t:'截图 1280 × 720 · 登录页报错',m:'截图工具 · 已识别文字',r:'1h',body:'[图片]\n本地识别出的文字：\n“登录失败，请稍后重试 (E-4012)”',src:'截图工具',prj:'payment-api',n:'1 次',sans:true},
+ {ic:'code',t:'export const MAX_RETRY = 3',m:'VS Code',r:'1h',body:'<span class="kw">export const</span> MAX_RETRY = 3',src:'VS Code',prj:'payment-api',n:'1 次'},
+ {ic:'term',t:'git switch -c fix/login-retry',m:'Windows Terminal',r:'2h',body:'git switch -c fix/login-retry',src:'Windows Terminal',prj:'payment-api',n:'1 次'}
+]
+let sel=0
+function renderClips(){
+  const l=$('#cliplist');l.innerHTML='<div class="day">今天</div>'+clips.map((c,i)=>`<div class="ci${i===sel?' on':''}" style="--i:${i}" data-i="${i}"><span class="ty"><svg class="i"><use href="#i-${c.ic}"/></svg></span><div style="min-width:0"><div class="tx${c.sans?' sans':''}">${c.t.replace(/</g,'&lt;')}</div><div class="meta">${c.m}</div></div><span class="r"><span>${c.r}</span>${i<9?`<kbd class="k">${i+1}</kbd>`:''}</span></div>`).join('')
+  l.querySelectorAll('.ci').forEach(e=>e.addEventListener('click',()=>{sel=+e.dataset.i;l.querySelectorAll('.ci').forEach(x=>x.classList.toggle('on',x===e));showClip()}));showClip()
+}
+function showClip(){const c=clips[sel];$('#pvcode').innerHTML=c.body;$('#pvmeta').innerHTML=`<dt>来源</dt><dd>${c.src}</dd><dt>项目</dt><dd>${c.prj}</dd><dt>复制</dt><dd class="mono">${c.n}</dd>`}
+$('#filters').addEventListener('click',e=>{if(!e.target.classList.contains('fl'))return;$('#filters').querySelectorAll('.fl').forEach(f=>f.classList.toggle('on',f===e.target))})
+
+/* ---- palette ---- */
+let palOpen=false,pi=0
+const palItems=[
+ {g:'剪贴板',ic:'bug',t:"TypeError: Cannot read properties of undefined",m:true,r:'2m',pv:clips[1].body},
+ {g:'剪贴板',ic:'code',t:'retryCount = 0; while (retryCount < MAX_RETRY)',m:true,r:'刚刚',pv:clips[0].body},
+ {g:'剪贴板',ic:'term',t:'npm test -- --grep retry',m:true,r:'8m',pv:'npm test -- --grep retry'},
+ {g:'账号与密钥',ic:'key',t:'支付后台 · staging',r:'依次粘贴',pv:'用户名  payment-ops\n密码    ••••••••••\n验证码  482 917\n\n→ 依次粘贴：用户名 → 密码 → 验证码'},
+ {g:'账号与密钥',ic:'lock',t:'短信服务 API',r:'复制 Key',pv:'API Key  ••••••••••••\n只复制，不显示'},
+ {g:'会话',ic:'chat',t:'修复登录重试',r:'等你确认',pv:'payment-api · 7 / 30 次请求\n1 个写入待确认'}
+]
+function renderPal(){
+  const l=$('#palList');let html='<div class="hl" id="hl"></div>',g=''
+  palItems.forEach((it,i)=>{if(it.g!==g){g=it.g;html+=`<div class="gh">${g}</div>`}html+=`<div class="pr" data-i="${i}"><span class="ty"><svg class="i"><use href="#i-${it.ic}"/></svg></span><span class="tx${it.m?' m':''}">${it.t.replace(/</g,'&lt;')}</span><span class="r">${it.r}</span></div>`})
+  l.innerHTML=html;l.querySelectorAll('.pr').forEach(e=>{e.addEventListener('mouseenter',()=>{pi=+e.dataset.i;hl()});e.addEventListener('click',()=>{pi=+e.dataset.i;choose()})});hl()
+}
+function hl(){const row=$('#palList').querySelector(`.pr[data-i="${pi}"]`);$('#hl').style.transform=`translateY(${row.offsetTop}px)`;$('#palPv').innerHTML=palItems[pi].pv;$('#palMeta').innerHTML=`<span>${palItems[pi].g}</span><span class="mono">${palItems[pi].r}</span>`}
+function openPal(){palOpen=true;renderPal();$('#scrim').classList.add('on');$('#pal').classList.add('on');setTimeout(()=>$('#palIn').focus(),50)}
+function closePal(){palOpen=false;$('#scrim').classList.remove('on');$('#pal').classList.remove('on')}
+function palKey(e){
+  if(e.key==='Escape'){closePal();return}
+  if(e.key==='ArrowDown'){e.preventDefault();pi=Math.min(palItems.length-1,pi+1);hl()}
+  if(e.key==='ArrowUp'){e.preventDefault();pi=Math.max(0,pi-1);hl()}
+  if(e.key==='Enter'){e.preventDefault();choose()}
+  if(/^[1-9]$/.test(e.key)&&document.activeElement!==$('#palIn')){pi=Math.min(palItems.length-1,+e.key-1);choose()}
+}
+function choose(){const it=palItems[pi];closePal();setTimeout(()=>island(it.g==='账号与密钥'?'依次粘贴：用户名 → 密码 → 验证码':'已粘贴 · '+it.t,it.g==='账号与密钥'?'Alt Shift V 下一项':'到 Windows Terminal'),220)}
+
+/* ---- island ---- */
+let islandTimer
+function island(text,hint){
+  const el=$('#island');$('#islandTxt').textContent=text||clips[Math.floor(Math.random()*4)].t;el.querySelector('.ik').innerHTML=hint?`<span>${hint}</span>`:'<kbd>Alt</kbd><kbd>Space</kbd>'
+  el.classList.remove('show');void el.offsetWidth;el.classList.add('show');clearTimeout(islandTimer);islandTimer=setTimeout(()=>el.classList.remove('show'),2600)
+}
+setTimeout(()=>island("TypeError: Cannot read properties of undefined (reading 'token')"),900)
+
+/* ---- resources: totp + spotlight + copy feedback ---- */
+let sec=30-(Math.floor(Date.now()/1000)%30)
+const tr=$('#tring'),ts=$('#tsec')
+function totp(){sec--;if(sec<=0){sec=30;const d=String(Math.floor(Math.random()*1e6)).padStart(6,'0');$('#totp').innerHTML=[...d.slice(0,3)+' '+d.slice(3)].map((c,i)=>`<span style="transform:translateY(-6px);opacity:0;transition-delay:${i*30}ms">${c}</span>`).join('');requestAnimationFrame(()=>requestAnimationFrame(()=>$('#totp').querySelectorAll('span').forEach(s=>{s.style.transform='';s.style.opacity=1})))}tr.style.strokeDashoffset=94.2*(1-sec/30);ts.textContent=sec+'s'}
+setInterval(totp,1000);totp()
+document.querySelectorAll('.card').forEach(c=>c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();c.style.setProperty('--mx',e.clientX-r.left+'px');c.style.setProperty('--my',e.clientY-r.top+'px')}))
+function copied(b){const o=b.innerHTML;b.classList.add('ok');b.innerHTML='<svg class="i" style="width:14px;height:14px"><use href="#i-shield"/></svg>已复制 · 30s 后清除';setTimeout(()=>{b.classList.remove('ok');b.innerHTML=o},1800)}
+</script>
+</body>
+</html>

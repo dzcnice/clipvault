@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>ClipVault · 控制台方向高保真稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font-ui:"Plus Jakarta Sans","Microsoft YaHei UI","PingFang SC",sans-serif;
+  --font-mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+  --r:6px;
+}
+[data-theme=dark]{
+  --canvas:#0B0C0E;--panel:#101215;--raised:#15181C;--sunken:#08090A;
+  --line:#22252A;--line-2:#30343B;--grid:rgba(236,232,225,.035);
+  --text:#ECE8E1;--text-2:#A39E95;--text-3:#68645D;
+  --signal:#FF6A1A;--signal-ink:#1A0B03;--signal-soft:rgba(255,106,26,.12);--signal-line:rgba(255,106,26,.45);
+  --ok:#3DDC97;--warn:#FFC53D;--warn-soft:rgba(255,197,61,.08);--danger:#FF4D5E;
+  --add:rgba(61,220,151,.10);--del:rgba(255,77,94,.10);
+}
+[data-theme=light]{
+  --canvas:#EFECE4;--panel:#F7F5EF;--raised:#FFFFFF;--sunken:#E6E2D8;
+  --line:#DAD5C9;--line-2:#C7C1B3;--grid:rgba(26,24,20,.045);
+  --text:#1A1814;--text-2:#5F5A51;--text-3:#8E887D;
+  --signal:#E2520B;--signal-ink:#FFF6EF;--signal-soft:rgba(226,82,11,.10);--signal-line:rgba(226,82,11,.45);
+  --ok:#14915C;--warn:#B47B00;--warn-soft:rgba(180,123,0,.08);--danger:#D42A3C;
+  --add:rgba(20,145,92,.10);--del:rgba(212,42,60,.09);
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--canvas);color:var(--text);font:400 13px/1.55 var(--font-ui);-webkit-font-smoothing:antialiased;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.label{font:500 10.5px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text-3)}
+kbd{font:500 10.5px/1 var(--font-mono);color:var(--text-2);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px;padding:2px 5px;background:var(--panel)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.app{height:100vh;display:grid;grid-template-columns:56px 264px minmax(0,1fr) 312px;grid-template-rows:44px minmax(0,1fr) 52px;
+  grid-template-areas:"rail top top top" "rail list stage inspect" "rail dock dock dock"}
+/* ===== rail ===== */
+.rail{grid-area:rail;background:var(--sunken);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px}
+.mark{width:30px;height:30px;border:1.5px solid var(--signal);border-radius:7px;display:grid;place-items:center;margin-bottom:14px;position:relative}
+.mark::after{content:"";width:10px;height:10px;background:var(--signal);border-radius:2px}
+.ri{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--text-3);position:relative;transition:color .15s,background .15s}
+.ri:hover{color:var(--text);background:var(--panel)}
+.ri.on{color:var(--text);background:var(--raised);box-shadow:inset 0 0 0 1px var(--line-2)}
+.ri.on::before{content:"";position:absolute;left:-8px;top:10px;bottom:10px;width:2px;background:var(--signal);border-radius:2px}
+.ri .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 2px var(--sunken)}
+.rail .sp{flex:1}
+.led{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+/* ===== top ===== */
+.top{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 16px 0 20px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--canvas) 80%,transparent);backdrop-filter:blur(8px)}
+.crumb{display:flex;align-items:center;gap:8px;font-size:13px}
+.crumb .p{color:var(--text-3)} .crumb .sep{color:var(--line-2)}
+.pill{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--text-2);background:var(--panel)}
+.pill b{color:var(--text);font-weight:500}
+.top .grow{flex:1}
+.meter{display:flex;align-items:center;gap:10px}
+.bar{width:84px;height:4px;background:var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;width:23%;background:var(--signal)}
+.state{display:inline-flex;align-items:center;gap:8px;font:500 11px var(--font-mono);letter-spacing:.08em;color:var(--warn);text-transform:uppercase}
+.state::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:var(--r);border:1px solid var(--line-2);font-size:12.5px;color:var(--text);background:var(--panel);transition:border-color .15s,transform .1s}
+.btn:hover{border-color:var(--text-3)} .btn:active{transform:translateY(1px)}
+.btn.sig{background:var(--signal);border-color:var(--signal);color:var(--signal-ink);font-weight:600}
+.btn.ghost{background:none;border-color:transparent;color:var(--text-2)}
+/* ===== session list ===== */
+.list{grid-area:list;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.list .head{padding:14px 14px 10px;display:flex;flex-direction:column;gap:10px}
+.search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--canvas);color:var(--text-3)}
+.search span{flex:1;font-size:12.5px}
+.grp{padding:12px 14px 6px;display:flex;justify-content:space-between}
+.si{margin:0 8px;padding:9px 10px;border-radius:var(--r);display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:4px 10px;align-items:center;transition:background .15s}
+.si:hover{background:var(--raised)}
+.si.on{background:var(--raised);box-shadow:inset 0 0 0 1px var(--line-2)}
+.si .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.si .m{grid-column:2/4;font:11px var(--font-mono);color:var(--text-3)}
+.st{width:8px;height:8px;border-radius:2px;transform:rotate(45deg)}
+.st.wait{background:var(--warn)} .st.run{background:var(--signal)} .st.done{background:var(--ok)} .st.idle{border:1.5px solid var(--text-3)}
+/* ===== stage ===== */
+.stage{grid-area:stage;display:flex;flex-direction:column;min-height:0;position:relative}
+.feed{flex:1;overflow:auto;padding:28px 40px 24px 0}
+.turn{display:grid;grid-template-columns:96px minmax(0,1fr);position:relative}
+.turn::before{content:"";position:absolute;left:71px;top:0;bottom:0;width:1px;background:var(--line)}
+.tick{font:11px var(--font-mono);color:var(--text-3);text-align:right;padding:3px 34px 0 0;position:relative}
+.tick::after{content:"";position:absolute;right:21px;top:7px;width:7px;height:7px;border-radius:50%;background:var(--canvas);border:1.5px solid var(--line-2)}
+.turn.user .tick::after{border-color:var(--text-2)}
+.turn.agent .tick::after{background:var(--signal);border-color:var(--signal);box-shadow:0 0 0 4px var(--signal-soft)}
+.turn.warn .tick::after{background:var(--warn);border-color:var(--warn)}
+.body{padding-bottom:22px;max-width:760px}
+.who{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.user .msg{font-size:14px;line-height:1.7}
+.ref{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;margin:0 2px;border-radius:5px;border:1px solid var(--line-2);background:var(--panel);font:12px var(--font-mono);vertical-align:1px}
+.ref.key{border-color:var(--signal-line);color:var(--signal)}
+.agent .msg{font-size:14px;line-height:1.75}
+code,.code{font:12.5px var(--font-mono);background:var(--panel);border:1px solid var(--line);padding:1px 5px;border-radius:4px}
+.proc{display:flex;align-items:center;gap:10px;margin:10px 0 0;padding:8px 12px;border:1px dashed var(--line-2);border-radius:var(--r);font:12px var(--font-mono);color:var(--text-2)}
+.proc .n{color:var(--text)} .proc .grow{flex:1}
+.ask{margin-top:10px;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);padding:14px 16px}
+.ask .opts{display:flex;gap:8px;margin-top:10px}
+.opt{height:30px;padding:0 12px;border:1px solid var(--line-2);border-radius:var(--r);display:inline-flex;align-items:center;gap:8px;font-size:12.5px}
+.opt.sel{border-color:var(--signal);background:var(--signal-soft)}
+.gate{margin-top:10px;border:1px solid var(--warn);border-radius:8px;overflow:hidden;background:var(--warn-soft);position:relative}
+.gate::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:repeating-linear-gradient(-45deg,var(--warn) 0 6px,transparent 6px 12px)}
+.gate .gh{display:flex;align-items:center;gap:10px;padding:11px 14px 11px 22px;border-bottom:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.gate .gh .t{font-weight:600;color:var(--warn)}
+.diff{font:12px/1.75 var(--font-mono);background:var(--sunken);padding:8px 0}
+.dl{display:grid;grid-template-columns:22px 44px 18px minmax(0,1fr);padding-right:14px}
+.dl .g{color:var(--text-3);text-align:right;padding-right:10px} .dl .s{color:var(--text-3)}
+.dl.a{background:var(--add)} .dl.a .s,.dl.a .c{color:var(--ok)}
+.dl.d{background:var(--del)} .dl.d .s,.dl.d .c{color:var(--danger)}
+.gate .gf{display:flex;align-items:center;gap:10px;padding:10px 14px 10px 22px}
+.gate .gf .grow{flex:1}
+.verify{display:flex;align-items:center;gap:10px;margin-top:10px;font:12px var(--font-mono);color:var(--text-2)}
+.verify .ok{color:var(--ok)}
+/* composer */
+.compose{margin:0 40px 18px 96px;border:1px solid var(--line-2);border-radius:10px;background:var(--panel);box-shadow:0 18px 40px -24px rgba(0,0,0,.6)}
+.compose .ta{padding:14px 16px 6px;font-size:14px;min-height:64px;color:var(--text)}
+.compose .ta .caret{display:inline-block;width:1.5px;height:17px;background:var(--signal);vertical-align:-3px;animation:pulse 1s steps(1) infinite}
+.compose .tb{display:flex;align-items:center;gap:6px;padding:8px 10px 10px}
+.compose .tb .grow{flex:1}
+.pop{display:none;position:absolute;left:96px;bottom:150px;width:420px;border:1px solid var(--line-2);border-radius:10px;background:var(--raised);box-shadow:0 24px 60px -20px rgba(0,0,0,.7);padding:6px}
+.pop .pi{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:6px}
+.pop .pi.on{background:var(--signal-soft)}
+.pop .pi .x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:12.5px var(--font-mono)}
+/* ===== inspector ===== */
+.inspect{grid-area:inspect;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:16px 18px}
+.sec{padding:16px 0;border-bottom:1px solid var(--line)}
+.sec:first-child{padding-top:4px}
+.sec h4{display:flex;justify-content:space-between;margin-bottom:10px}
+.goal{font-size:14px;line-height:1.6}
+.todo{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;padding:5px 0;font-size:12.5px}
+.ck{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line-2);display:grid;place-items:center}
+.ck.d{background:var(--ok);border-color:var(--ok)} .ck.r{border-color:var(--signal);box-shadow:inset 0 0 0 3px var(--panel);background:var(--signal)}
+.todo .dn{color:var(--text-3);text-decoration:line-through}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px}
+.kv dt{color:var(--text-3)} .kv dd{text-align:right;font-family:var(--font-mono)}
+.big{font:600 34px/1 var(--font-mono);letter-spacing:-.02em}
+.res{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);margin-top:6px;font-size:12.5px}
+.res .mask{margin-left:auto;font-family:var(--font-mono);color:var(--text-3);letter-spacing:.15em}
+/* ===== clip tape dock ===== */
+.dock{grid-area:dock;border-top:1px solid var(--line);background:var(--sunken);display:flex;align-items:center;gap:0;padding:0 0 0 16px;position:relative}
+.dock .lb{display:flex;align-items:center;gap:10px;padding-right:14px;margin-right:6px;border-right:1px solid var(--line);height:100%}
+.tape{display:flex;gap:6px;overflow:hidden;flex:1;mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.chip{flex:none;display:flex;align-items:center;gap:8px;height:32px;max-width:260px;padding:0 10px 0 6px;border:1px solid var(--line);border-radius:7px;background:var(--panel);transition:border-color .15s,transform .15s}
+.chip:hover{border-color:var(--signal-line);transform:translateY(-2px)}
+.chip .k{font:600 10.5px var(--font-mono);width:18px;height:18px;border-radius:4px;display:grid;place-items:center;background:var(--raised);color:var(--text-2);border:1px solid var(--line-2)}
+.chip .x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:12px var(--font-mono)}
+.chip .c{font:10px var(--font-mono);color:var(--text-3)}
+.chip.err .x{color:var(--danger)} .chip.sec .x{color:var(--text-3);letter-spacing:.2em}
+.dock .end{display:flex;align-items:center;gap:10px;padding:0 16px;height:100%;border-left:1px solid var(--line)}
+.corner{position:absolute;width:9px;height:9px;border-color:var(--text-3);opacity:.7}
+.corner.tl{left:8px;top:8px;border-left:1px solid;border-top:1px solid}
+.corner.br{right:8px;bottom:8px;border-right:1px solid;border-bottom:1px solid}
+.switch{position:fixed;right:16px;bottom:64px;z-index:5}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- RAIL -->
+  <nav class="rail" aria-label="主导航">
+    <div class="mark" title="ClipVault"></div>
+    <button class="ri on" aria-label="会话"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
+    <button class="ri" aria-label="剪贴板"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></button>
+    <button class="ri" aria-label="收件箱"><svg viewBox="0 0 24 24"><path d="M4 13l3-8h10l3 8v6H4zM4 13h5l1 2h4l1-2h5"/></svg><span class="dot"></span></button>
+    <button class="ri" aria-label="资源"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3M14 9l2 2"/></svg></button>
+    <div class="sp"></div>
+    <button class="ri" aria-label="更多"><svg viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button>
+    <button class="ri" aria-label="设置"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
+    <div style="height:14px"></div><span class="led" title="本机资料库已解锁"></span>
+  </nav>
+
+  <!-- TOP -->
+  <header class="top">
+    <div class="crumb"><span class="p">payment-api</span><span class="sep">/</span><span>修复登录重试</span></div>
+    <span class="state">等你确认</span>
+    <div class="grow"></div>
+    <span class="pill"><span class="label" style="letter-spacing:.08em">模型</span><b class="mono">gpt-6-astra</b><span style="color:var(--text-3)">caowo.fun</span></span>
+    <div class="meter"><span class="label">请求</span><div class="bar"><i></i></div><span class="mono" style="font-size:12px">7<span style="color:var(--text-3)">/30</span></span></div>
+    <span class="mono" style="font-size:12px;color:var(--text-2)">03:12</span>
+    <button class="btn"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M4 6h16M4 12h10M4 18h7"/></svg>计划模式</button>
+    <button class="btn ghost" aria-label="停止"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>停止</button>
+  </header>
+
+  <!-- SESSION LIST -->
+  <aside class="list" aria-label="会话">
+    <div class="head">
+      <button class="btn sig" style="justify-content:space-between;height:34px"><span style="display:flex;gap:8px;align-items:center"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>新会话</span><kbd style="background:transparent;color:var(--signal-ink);border-color:rgba(0,0,0,.25)">Ctrl N</kbd></button>
+      <div class="search"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg><span>搜索会话历史</span><kbd>/</kbd></div>
+    </div>
+    <div class="grp"><span class="label">payment-api</span><span class="label">3</span></div>
+    <div class="si on"><span class="st wait"></span><span class="t">修复登录重试</span><span class="mono" style="font-size:11px;color:var(--warn)">1 待批</span><span class="m">3 分钟前 · 7 次请求</span></div>
+    <div class="si"><span class="st run"></span><span class="t">补充接口测试</span><span class="mono" style="font-size:11px;color:var(--signal)">运行中</span><span class="m">刚刚 · 子 Agent ×2</span></div>
+    <div class="si"><span class="st done"></span><span class="t" style="color:var(--text-2)">升级 axios 到 1.8</span><span></span><span class="m">昨天 · 已验证</span></div>
+    <div class="grp"><span class="label">blog-site</span><span class="label">1</span></div>
+    <div class="si"><span class="st idle"></span><span class="t" style="color:var(--text-2)">迁移图片 CDN</span><span></span><span class="m">10-24 · 已停止</span></div>
+  </aside>
+
+  <!-- STAGE -->
+  <main class="stage">
+    <div class="feed">
+      <div class="turn user"><div class="tick">14:02</div><div class="body">
+        <div class="who"><span class="label">你</span></div>
+        <div class="msg">登录失败后不会重试，看下 <span class="ref">⧉ 报错堆栈 · 2 分钟前</span> 修掉，再用 <span class="ref key">⚿ 支付后台 · staging</span> 验证。</div>
+      </div></div>
+
+      <div class="turn agent"><div class="tick">14:02</div><div class="body">
+        <div class="who"><span class="label" style="color:var(--signal)">Agent</span></div>
+        <div class="msg">原因在 <code>auth/login.ts</code>：<code>retryCount</code> 只在成功时重置，第一次失败后计数就满了。我会改成每次发起登录前重置，再补一条失败重试的测试。</div>
+        <div class="proc"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M9 6l6 6-6 6"/></svg><span><span class="n">读取</span> 3 个文件</span><span>·</span><span><span class="n">搜索剪贴板</span> 1 次</span><span>·</span><span><span class="n">子 Agent</span> 1 个</span><span class="grow"></span><span style="color:var(--text-3)">12.4s</span></div>
+        <div class="ask">
+          <div class="who" style="margin:0"><span class="label">Agent 想问你</span></div>
+          <div style="font-size:14px;margin-top:6px">测试账号用哪个环境？</div>
+          <div class="opts"><span class="opt sel"><kbd>1</kbd>staging</span><span class="opt"><kbd>2</kbd>dev</span><span class="opt" style="color:var(--text-3)">自己填写…</span></div>
+        </div>
+      </div></div>
+
+      <div class="turn warn"><div class="tick">14:03</div><div class="body">
+        <div class="gate">
+          <div class="gh"><span class="t">需要确认 · 写入文件</span><span class="mono" style="color:var(--text-2)">auth/login.ts</span><span style="flex:1"></span><span class="mono" style="font-size:12px"><span style="color:var(--ok)">+6</span> <span style="color:var(--danger)">−1</span></span></div>
+          <div class="diff">
+            <div class="dl"><span></span><span class="g">41</span><span class="s"> </span><span class="c">async function login(input: LoginInput) {</span></div>
+            <div class="dl d"><span></span><span class="g">42</span><span class="s">−</span><span class="c">  if (retryCount &gt;= MAX_RETRY) throw lastError</span></div>
+            <div class="dl a"><span></span><span class="g">42</span><span class="s">+</span><span class="c">  retryCount = 0</span></div>
+            <div class="dl a"><span></span><span class="g">43</span><span class="s">+</span><span class="c">  while (retryCount &lt; MAX_RETRY) {</span></div>
+            <div class="dl a"><span></span><span class="g">44</span><span class="s">+</span><span class="c">    try { return await request(input) }</span></div>
+            <div class="dl a"><span></span><span class="g">45</span><span class="s">+</span><span class="c">    catch (error) { lastError = error; retryCount++ }</span></div>
+          </div>
+          <div class="gf"><span class="mono" style="font-size:11.5px;color:var(--text-2)">sha256 9f3a…c21e → 4b07…e990 · 只批准这一次</span><span class="grow"></span><button class="btn">拒绝 <kbd>Esc</kbd></button><button class="btn sig">允许写入 <kbd style="background:transparent;color:var(--signal-ink);border-color:rgba(0,0,0,.25)">Ctrl ↵</kbd></button></div>
+        </div>
+        <div class="verify"><span class="ok">✓</span>上一轮 <span class="code">node --test</span> 退出码 0 · 12 项通过 · 快照一致</div>
+      </div></div>
+    </div>
+
+    <div class="pop" aria-label="引用候选">
+      <div class="label" style="padding:6px 10px 8px">@剪贴板 · 最近复制</div>
+      <div class="pi on"><span style="color:var(--danger)">!</span><span class="x">TypeError: Cannot read properties of undefined (reading 'token')</span><kbd>↵</kbd></div>
+      <div class="pi"><span style="color:var(--text-3)">↗</span><span class="x">https://admin.example.test/login</span><span class="mono" style="font-size:11px;color:var(--text-3)">5m</span></div>
+      <div class="pi"><span style="color:var(--text-3)">$</span><span class="x">npm test -- --grep retry</span><span class="mono" style="font-size:11px;color:var(--text-3)">8m</span></div>
+    </div>
+
+    <div class="compose">
+      <div class="ta">补一条超时的情况也测一下 @剪<span class="caret"></span></div>
+      <div class="tb">
+        <button class="btn ghost" style="height:28px">@ 引用</button><button class="btn ghost" style="height:28px">/ 技能</button><button class="btn ghost" style="height:28px">附件</button>
+        <span class="grow"></span><span class="label">逐次确认</span><span style="width:10px"></span>
+        <button class="btn sig" style="height:30px">发送 <kbd style="background:transparent;color:var(--signal-ink);border-color:rgba(0,0,0,.25)">↵</kbd></button>
+      </div>
+    </div>
+  </main>
+
+  <!-- INSPECTOR -->
+  <aside class="inspect" aria-label="本会话上下文">
+    <div class="sec">
+      <h4><span class="label">目标</span><span class="label" style="color:var(--signal)">进行中</span></h4>
+      <div class="goal">登录失败自动重试 3 次，新增测试全部通过</div>
+      <div style="margin-top:12px">
+        <div class="todo"><span class="ck d"></span><span class="dn">定位重试计数问题</span><span class="mono" style="font-size:11px;color:var(--text-3)">14:02</span></div>
+        <div class="todo"><span class="ck r"></span><span>修改 login.ts 重试逻辑</span><span class="mono" style="font-size:11px;color:var(--warn)">待批</span></div>
+        <div class="todo"><span class="ck"></span><span style="color:var(--text-2)">补失败与超时测试</span><span></span></div>
+        <div class="todo"><span class="ck"></span><span style="color:var(--text-2)">本机运行 node --test</span><span></span></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h4><span class="label">本轮额度</span><span class="label">03:12 / 20:00</span></h4>
+      <div style="display:flex;align-items:baseline;gap:6px"><span class="big">7</span><span class="mono" style="color:var(--text-3)">/ 30 次请求</span></div>
+      <div class="bar" style="width:100%;margin-top:10px;height:3px"><i></i></div>
+    </div>
+    <div class="sec">
+      <h4><span class="label">引用资料</span><span class="label">3</span></h4>
+      <div class="res"><span>⧉</span><span>报错堆栈</span><span class="mask" style="letter-spacing:0">剪贴板</span></div>
+      <div class="res"><span>⌸</span><span class="mono" style="font-size:12px">auth/login.ts</span><span class="mask" style="letter-spacing:0">文件</span></div>
+      <div class="res" style="border-color:var(--signal-line)"><span style="color:var(--signal)">⚿</span><span>支付后台 · staging</span><span class="mask">••••••</span></div>
+    </div>
+    <div class="sec" style="border:0">
+      <h4><span class="label">本会话授权</span></h4>
+      <dl class="kv"><dt>权限</dt><dd>逐次确认</dd><dt>资源</dt><dd>1 · 仅引用</dd><dt>沙箱</dt><dd>PowerShell 写入限制</dd><dt>会话</dt><dd>加密 · 214 事件</dd></dl>
+    </div>
+  </aside>
+
+  <!-- CLIP TAPE -->
+  <footer class="dock" aria-label="剪贴带">
+    <div class="lb"><span class="label">剪贴带</span><kbd>Alt Space</kbd></div>
+    <div class="tape">
+      <div class="chip err"><span class="k">1</span><span class="x">TypeError: Cannot read properties of undefined</span><span class="c">2m</span></div>
+      <div class="chip"><span class="k">2</span><span class="x">https://admin.example.test/login</span><span class="c">5m</span></div>
+      <div class="chip sec"><span class="k">3</span><span class="x">••••••••••</span><span class="c">密钥 · 28s 后清除</span></div>
+      <div class="chip"><span class="k">4</span><span class="x">npm test -- --grep retry</span><span class="c">8m ×3</span></div>
+      <div class="chip"><span class="k">5</span><span class="x">retryCount = 0; while (retryCount &lt; MAX)</span><span class="c">11m</span></div>
+      <div class="chip"><span class="k">6</span><span class="x">截图 1280×720</span><span class="c">1h</span></div>
+    </div>
+    <div class="end"><span class="led"></span><span class="mono" style="font-size:11.5px;color:var(--text-2)">监听中 · 1,284 条</span></div>
+  </footer>
+</div>
+<button class="btn switch" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">切换明暗</button>
+</body>
+</html>

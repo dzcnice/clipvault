@@ -1,9 +1,11 @@
 # ClipVault
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Version](https://img.shields.io/badge/version-v3.3.0-brightgreen)](#开发)
+[![Version](https://img.shields.io/badge/version-v3.4.0-brightgreen)](#开发)
 
-**ClipVault** 是本地优先的个人凭证与剪贴板工作台：系统钥匙串保护的保险库、智能剪贴板历史、片段库、TOTP / 健康检查、导入导出——数据不出本机。
+**ClipVault** 是基于官方 DeepSeek Harness 原生会话的个人 AI 编程工作台：保留系统安全存储保护的凭证、剪贴板历史、片段和 TOTP，并在会话中使用项目、资源与剪贴板。资料在本机管理；运行远程模型时会发送用户批准的目标、上下文及工具结果。
+
+> 2026-10-27：Harness 原生纠正开发，P0–P3 完成、P4 部分完成。最新独立目录包：`dist/harness-native-20261027/win-unpacked/ClipVault Workbench Preview.exe`，未签名、未安装、未发布。使用 `%APPDATA%/clipvault-workbench-preview`，与此前工作台预览版共享资料，与日常安装版 ClipVault 分开，不依赖 Docker 或 OnSet。[当前交接与未完成项](docs/HARNESS-NATIVE-DELIVERY.md) · [阶段进度](docs/HARNESS-NATIVE-PROGRESS.md) · [最新验收](docs/P4-VERIFICATION.md)。2026-10-26 的任务版构建及文档保留作历史；下方 GitHub 下载链接属于此前发布的 ClipVault。
 
 > v3.0 起为**单机个人版**。团队 P2P、Vera AI、CLI / HTTP / SSH、分享包等比赛向能力已下线。
 
@@ -41,13 +43,14 @@
 ### 效率
 
 - 全局快捷键 + 命令 HUD
-- 关窗驻托盘、开机自启（可选）、像素壳 + 琥珀金主题
+- 关窗驻托盘、开机自启（可选）、中性灰蓝主题与明暗模式
+- 原生多轮会话、计划审批、目标待办、只读子 Agent、内存全文历史搜索
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
-| 桌面框架 | Electron 37 + electron-vite |
+| 桌面框架 | Electron 43.8.3 + electron-vite 5 |
 | UI | React 18 + Tailwind + Radix / shadcn |
 | 存储 | better-sqlite3 + SQL migrations |
 | 加密 | Node crypto + noble 系列 + OS safeStorage |
@@ -55,7 +58,7 @@
 
 ## 开发
 
-要求：Node.js 20+、npm 10+
+要求：Node.js 22、npm 10.9.4；Harness 随包 Node 固定为 22.23.4，首次构建从官方地址下载并核对 SHA-256。系统 Node 不会被修改。
 
 ```bash
 cd ClipVault
@@ -64,7 +67,7 @@ npm run dev
 npm run typecheck
 npm test
 npm run preflight          # typecheck + test + build
-npm run build:win
+npm run build:workbench   # 独立应用身份、资料目录和安装包；不发布
 ```
 
 发版前建议：
