@@ -1,0 +1,63 @@
+{
+  "report": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-official-harness-cydiqj\\report.json",
+  "source": "https://github.com/deepseek-ai/deepseek-harness",
+  "version": "0.2.1-rc.2",
+  "sourceCommit": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "independentPath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-official-harness-cydiqj\\独立运行时",
+  "realCredentialsUsed": false,
+  "externalModelRequests": false,
+  "first": [
+    "ready",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "result"
+  ],
+  "restored": [
+    "ready",
+    "resumed",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "result"
+  ],
+  "stopped": [
+    "ready",
+    "resumed",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "notification",
+    "stopped"
+  ],
+  "tools": [
+    "workbench_check_api",
+    "workbench_list_files",
+    "workbench_read_file",
+    "workbench_run_check",
+    "workbench_verify_file",
+    "workbench_write_file"
+  ]
+}

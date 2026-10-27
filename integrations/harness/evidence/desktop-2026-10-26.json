@@ -1,0 +1,87 @@
+{
+  "passed": true,
+  "profile": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-desktop-p9KGZU",
+  "screenshots": [
+    "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-desktop-p9KGZU\\workbench-1280.png",
+    "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-desktop-p9KGZU\\workbench-960.png",
+    "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-desktop-p9KGZU\\projects-960.png",
+    "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-desktop-p9KGZU\\clipboard-960.png"
+  ],
+  "errors": [],
+  "pages": [
+    {
+      "route": "workbench",
+      "requestedSize": [
+        1280,
+        820
+      ],
+      "actualSize": [
+        1280,
+        820
+      ],
+      "minimumSize": [
+        960,
+        640
+      ],
+      "resizable": true,
+      "title": "工作台",
+      "documentOverflow": false
+    },
+    {
+      "route": "workbench",
+      "requestedSize": [
+        960,
+        640
+      ],
+      "actualSize": [
+        960,
+        640
+      ],
+      "minimumSize": [
+        960,
+        640
+      ],
+      "resizable": true,
+      "title": "工作台",
+      "documentOverflow": false
+    },
+    {
+      "route": "projects",
+      "requestedSize": [
+        960,
+        640
+      ],
+      "actualSize": [
+        960,
+        640
+      ],
+      "minimumSize": [
+        960,
+        640
+      ],
+      "resizable": true,
+      "title": "项目",
+      "documentOverflow": false
+    },
+    {
+      "route": "clipboard",
+      "requestedSize": [
+        960,
+        640
+      ],
+      "actualSize": [
+        960,
+        640
+      ],
+      "minimumSize": [
+        960,
+        640
+      ],
+      "resizable": true,
+      "title": "历史背包",
+      "documentOverflow": false
+    }
+  ],
+  "processExitCode": 0,
+  "cleanExit": true
+}

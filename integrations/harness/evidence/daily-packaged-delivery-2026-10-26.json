@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-26",
+  "version": "3.4.0",
+  "packageName": "clipvault-workbench-preview",
+  "productName": "ClipVault Workbench Preview",
+  "appId": "com.clipvault.workbench.preview",
+  "files": [
+    {
+      "file": "dist/workbench-daily-20261026/clipvault-workbench-preview-3.4.0-setup.exe",
+      "bytes": 153138992,
+      "sha256": "dde45e2bc5a0e12fa93621e765364cbbee3bd401ac64484293df6898e97c7319"
+    },
+    {
+      "file": "dist/workbench-daily-20261026/win-unpacked/ClipVault Workbench Preview.exe",
+      "bytes": 239836160,
+      "sha256": "9f7473c7231e35bd979a79499516edd7f8d23e38eac1de902fa53463f5a32406"
+    },
+    {
+      "file": "dist/workbench-daily-20261026/win-unpacked/resources/app.asar",
+      "bytes": 29743472,
+      "sha256": "f6e497d0d65378bc9f2fe896aa019942825ec3d432e3dce9fa330d08c33a24ee"
+    }
+  ],
+  "asarEntries": 5042,
+  "unwantedEntries": [],
+  "runtimeFiles": 74,
+  "runtimeHashVerified": true,
+  "node": "22.23.4",
+  "electron": "43.8.3",
+  "testFiles": 87,
+  "tests": 465,
+  "skipped": 0,
+  "installed": false,
+  "published": false,
+  "signed": false,
+  "packagedApplicationStarted": true,
+  "pid": 35800,
+  "dataDirectory": "C:/Users/Administrator/AppData/Roaming/clipvault-workbench-preview",
+  "preUpgradeBackup": "out/before-daily-profile-20261026",
+  "profileIntegrityCheck": "ok",
+  "profileCountsPreserved": true,
+  "clipboardMonitorEnabled": false,
+  "packagedVaultAutoUnlocked": true,
+  "nativeWindowHandleObserved": 1510594,
+  "processResponding": true,
+  "shortcutConflictsObserved": true,
+  "dataDirectoryVerifiedInStartupLog": true
+}

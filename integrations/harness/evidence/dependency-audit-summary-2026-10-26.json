@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-26",
+  "command": "npm audit --json",
+  "vulnerabilities": {
+    "info": 0,
+    "low": 2,
+    "moderate": 74,
+    "high": 30,
+    "critical": 1,
+    "total": 107
+  },
+  "zodFixedVersion": "4.6.6",
+  "zodReported": false,
+  "critical": "tar",
+  "criticalNodes": [
+    "node_modules/tar"
+  ],
+  "scope": "Includes development and transitive dependencies; not a runtime exploitability assessment"
+}

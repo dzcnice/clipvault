@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "model": "gpt-6-astra",
+  "endpoint": "https://caowo.fun/v1",
+  "taskId": "37c8a0e6-9caa-44ba-90c3-63aaba24f6bc",
+  "sessionId": "3a5d005d-a3ba-4bd2-96ba-0353302e8056",
+  "state": "completed",
+  "changes": [
+    {
+      "path": "settings.json",
+      "state": "completed"
+    }
+  ],
+  "approvals": [
+    "连接模型运行任务",
+    "写入文件",
+    "运行本机检查"
+  ],
+  "profile": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-live-wjvkmi\\profile",
+  "directory": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\clipvault-workbench-preview-live-wjvkmi\\sample-project",
+  "actualModelRequests": true,
+  "actualLocalCheck": true,
+  "noPlainSession": true,
+  "modelKeyAbsentFromDatabase": true,
+  "sourceProfileReadOnly": true,
+  "verification": {
+    "command": "node --test settings.test.cjs",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: enabled\nok 1 - enabled\n  ---\n  duration_ms: 0.6504\n  type: 'test'\n  ...\n# Subtest: source\nok 2 - source\n  ---\n  duration_ms: 0.1009\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 68.4953\n",
+    "engine": "local-node",
+    "manifest": {
+      "settings.json": "ffaaeb4a4b34424b97b79a1cbb96821063c3c2ae663b28e40ff02b3c69a6def4",
+      "settings.test.cjs": "fd1145ba19d5e49e4495f0a9c4fd7efc567fe078ea07a628af67cf34171c861f"
+    },
+    "unchanged": true
+  }
+}

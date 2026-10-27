@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-26",
+  "platform": "win32-x64",
+  "files": [
+    {
+      "file": "E:\\粘贴板\\粘贴板\\ClipVault\\dist\\workbench-20261026\\clipvault-workbench-preview-3.3.0-setup.exe",
+      "bytes": 134704007,
+      "sha256": "FF229B48EF9E0A830BCB42C5D9173857A55060DAF6D3773999DDDEC7427A8D8F"
+    },
+    {
+      "file": "E:\\粘贴板\\粘贴板\\ClipVault\\dist\\workbench-20261026\\win-unpacked\\ClipVault Workbench Preview.exe",
+      "bytes": 204857344,
+      "sha256": "2D91D08E2627144B2BD918FE56E9B11AF2AA755363D9C7CE40F22BCA02430F61"
+    },
+    {
+      "file": "E:\\粘贴板\\粘贴板\\ClipVault\\dist\\workbench-20261026\\win-unpacked\\resources\\app.asar",
+      "bytes": 71956733,
+      "sha256": "0E8DE539AD13AF7B4F9E347E836C448D521638E66147442C597F82EDD4DF105A"
+    }
+  ],
+  "installed": false,
+  "published": false,
+  "signed": false,
+  "sourceAuditErrors": 0,
+  "tests": 447,
+  "testFiles": 80,
+  "actualCredentialScanFiles": 440,
+  "actualCredentialMatches": 0,
+  "packagedApplicationStarted": true,
+  "packagedVaultAutoUnlocked": true,
+  "nativeWindowVisible": true,
+  "dataDirectory": "C:\\Users\\Administrator\\AppData\\Roaming\\clipvault-workbench-preview"
+}
