@@ -3,10 +3,12 @@
  */
 
 import type { API } from './index'
+import type { SessionAPI } from '../types/session'
 
 declare global {
   interface Window {
     api: API
+    sessionAPI: SessionAPI
   }
 }
 

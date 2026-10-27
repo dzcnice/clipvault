@@ -8,6 +8,8 @@ import { hudAPI } from './hud-api'
 import { toolsAPI } from './tools-api'
 import { securityAPI } from './security-api'
 import { updaterAPI, importerAPI } from './updater-api'
+import { workbenchAPI } from './workbench-api'
+import { sessionAPI } from './session-api'
 import type {
   Credential,
   CreateCredentialInput,
@@ -32,6 +34,7 @@ import type {
 
 // 定义暴露给渲染进程的 API
 const api = {
+  workbench: workbenchAPI,
   // ==================== 凭证 API ====================
   credential: {
     /** 创建凭证（个人版固定写入 personal） */
@@ -107,8 +110,15 @@ const api = {
       limit?: number
       offset?: number
       workspace?: WorkspaceContext
+      requestKey?: 'history-page' | 'hud'
     }): Promise<ApiResponse<{ items: ClipboardItem[]; total: number }>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_GET_HISTORY, params),
+
+    saveSnapshot: (id: string): Promise<ApiResponse<ClipboardItem>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_SAVE_SNAPSHOT, id),
+
+    getOccurrences: (id: string): Promise<ApiResponse<import('../types').ClipboardOccurrence[]>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_GET_OCCURRENCES, id),
 
     clearHistory: (): Promise<ApiResponse<number>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_CLEAR_HISTORY),
@@ -140,9 +150,11 @@ const api = {
      */
     copyItem: (
       id: string,
-      opts?: { mode?: 'both' | 'path' | 'image' }
+      opts?: { mode?: 'both' | 'path' | 'image'; paste?: boolean }
     ): Promise<ApiResponse<boolean>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_COPY_ITEM, id, opts),
+
+    groups: (): Promise<ApiResponse<{ categories: Record<string, number>; projects: Record<string, number>; total: number; pinned: number; saved: number }>> => ipcRenderer.invoke('clipboard:groups'),
 
     /** 仅复制图片本地路径文本（终端 / CLI） */
     copyPath: (id: string): Promise<ApiResponse<string>> =>
@@ -288,7 +300,11 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, backupPath),
 
     delete: (backupPath: string): Promise<ApiResponse<boolean>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BACKUP_DELETE, backupPath)
+      ipcRenderer.invoke(IPC_CHANNELS.BACKUP_DELETE, backupPath),
+    exportPortable: (password: string): Promise<ApiResponse<{ filePath?: string }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BACKUP_EXPORT, password),
+    importPortable: (password?: string): Promise<ApiResponse<boolean>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BACKUP_IMPORT, password)
   },
 
   // ==================== 应用设置 API ====================
@@ -458,6 +474,9 @@ const api = {
         hideAfterCopy?: boolean
         minClipboardLength?: number
         maxHistorySize?: number
+        historyRetentionDays?: number
+        historyMaxSizeMb?: number
+        imageRetentionDays?: number
         excludedApps?: string[]
         clipboardMonitorEnabled?: boolean
         saveImages?: boolean
@@ -479,6 +498,9 @@ const api = {
         hideAfterCopy?: boolean
         minClipboardLength?: number
         maxHistorySize?: number
+        historyRetentionDays?: number
+        historyMaxSizeMb?: number
+        imageRetentionDays?: number
         excludedApps?: string[]
         clipboardMonitorEnabled?: boolean
         saveImages?: boolean
@@ -501,6 +523,9 @@ const api = {
         hideAfterCopy?: boolean
         minClipboardLength?: number
         maxHistorySize?: number
+        historyRetentionDays?: number
+        historyMaxSizeMb?: number
+        imageRetentionDays?: number
         excludedApps?: string[]
         clipboardMonitorEnabled?: boolean
         saveImages?: boolean
@@ -549,6 +574,7 @@ const api = {
 
 // 暴露 API 到渲染进程
 contextBridge.exposeInMainWorld('api', api)
+contextBridge.exposeInMainWorld('sessionAPI', sessionAPI)
 
 // 导出类型供渲染进程使用
 export type API = typeof api
