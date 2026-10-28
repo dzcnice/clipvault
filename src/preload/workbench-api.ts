@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type { TaskTemplate } from '../types/workbench'
 import type { ApiResponse } from '../types'
 import type { IntakeCommit, IntakeReview, IntakeSource, ResourceSequenceState } from '../types/resources'
+type JarvisSettings = { about: string; aboutLimit: number; hints: { error: boolean; image: boolean; credential: boolean; translate: boolean } }
 import type { ContextItem, ModelConfig, ModelOption, ModelServiceInput, ModelServiceStatus, ProjectInput, ResourceDraft, ResourceInput, TaskDetail, TaskInput, TaskFollowUpInput, WorkbenchSnapshot, WorkProject, WorkResource, WorkTask } from '../types/workbench'
 
 const call = <T>(method: string, payload?: unknown): Promise<ApiResponse<T>> => ipcRenderer.invoke('workbench:call', method, payload)
@@ -40,6 +41,12 @@ export const workbenchAPI = {
   saveResource: (input: ResourceInput) => call<WorkResource>('saveResource', input),
   revokeResource: (id: string) => call<boolean>('revokeResource', id),
   importCredential: (id: string) => call<WorkResource>('importCredential', id),
+  /** 自动输入：用户名 → Tab → 密码（不提交），验证码留给 Alt+Shift+V。 */
+  autoType: (id: string) => call<ResourceSequenceState>('autoType', id),
+  legacyCredentials: () => call<number>('legacyCredentials'),
+  jarvisSettings: () => call<JarvisSettings>('jarvisSettings'),
+  saveJarvisSettings: (input: { about?: string; hints?: Partial<JarvisSettings['hints']> }) => call<JarvisSettings>('saveJarvisSettings', input),
+  importAllCredentials: () => call<{ imported: number; failed: number }>('importAllCredentials'),
   copyField: (id: string, field: string, version: number) => call<boolean>('copyField', { id, field, version }),
   openResource: (id: string) => call<boolean>('openResource', id),
   protectImages: () => call<{ converted: number; retainedOriginals: number; failed: number } | null>('protectImages'),

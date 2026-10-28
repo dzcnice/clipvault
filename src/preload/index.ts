@@ -163,6 +163,24 @@ const api = {
     getThumbnail: (id: string): Promise<ApiResponse<string | null>> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_GET_THUMBNAIL, id),
 
+    /** 详情与大图查看：最长边 1800px 的预览（解密后仅在内存中）。 */
+    getImage: (id: string): Promise<ApiResponse<string | null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_GET_IMAGE, id),
+
+    /** 在会话输入框里粘贴/拖入的图片：存为剪贴板图片记录（重复图片会合并），返回记录。 */
+    savePastedImage: (dataUrl: string): Promise<ApiResponse<ClipboardItem>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_SAVE_PASTED_IMAGE, dataUrl),
+
+    /** 截图问 AI：调起系统框选截图，返回截到的剪贴板图片 ID（取消或超时为 null）。 */
+    capture: (): Promise<ApiResponse<string | null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.JARVIS_CAPTURE),
+
+    onCapture: (callback: (clipboardId: string) => void): (() => void) => {
+      const listener = (_event: unknown, id: string): void => callback(id)
+      ipcRenderer.on('jarvis:captured', listener)
+      return () => { ipcRenderer.removeListener('jarvis:captured', listener) }
+    },
+
     createSnippet: (
       input: CreateSnippetInput & { workspace?: WorkspaceContext }
     ): Promise<ApiResponse<ClipboardItem>> =>
@@ -187,6 +205,20 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_TOGGLE_MONITOR, enabled),
 
     // 监听新的剪贴板内容
+    /** Jarvis 轻提示（主窗口在前台时）。 */
+    onHint: (callback: (hint: { kind: 'error' | 'image' | 'credential' | 'translate'; clipboardId: string; title: string; action: string; prompt?: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, hint: Parameters<typeof callback>[0]): void => callback(hint)
+      ipcRenderer.on('jarvis:hint', handler)
+      return () => { ipcRenderer.removeListener('jarvis:hint', handler) }
+    },
+
+    /** 后台 OCR 识别完一张图片后通知（用于刷新列表里的图片文字）。 */
+    onOcrDone: (callback: (id: string) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, id: string): void => callback(id)
+      ipcRenderer.on('clipboard:ocr-done', handler)
+      return () => { ipcRenderer.removeListener('clipboard:ocr-done', handler) }
+    },
+
     onNewItem: (callback: (item: ClipboardItem) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, item: ClipboardItem): void => {
         callback(item)
