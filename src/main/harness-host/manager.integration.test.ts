@@ -155,7 +155,8 @@ describe.skipIf(!isSqliteAvailable())('Harness-native session lifecycle with off
     const bodies = modelStub(() => reply('PREWARM_OK'))
     const id = await session()
     await manager.prewarm(id)
-    expect(manager.busy).toBe(true)
+    // 预热只是可回收的缓存：不算忙，但确实有一个 Host 在保温。
+    expect(manager.busy).toBe(false); expect(manager.warming).toBe(1)
     expect(bodies).toHaveLength(0)
     expect(readEncryptedSession(id)).toBeNull()
     approve()

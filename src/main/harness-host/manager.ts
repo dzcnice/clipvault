@@ -1,9 +1,10 @@
 import { app } from 'electron'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import * as store from '../../db/workbench-store'
-import { createSessionRecord, sessionRecords, updateSessionRecord, readEncryptedSession, sessionFamilyOperation, saveSessionReceipt, sessionReceipts } from '../../db/harness-session-store'
+import { createSessionRecord, sessionRecords, updateSessionRecord, readEncryptedSession, sessionFamilyOperation, saveSessionReceipt, sessionReceipts, sessionReceipt, deleteSessionFamily } from '../../db/harness-session-store'
+import type { VisionImage } from '../workbench/vision'
 import type { HostSessionSummary, PromptInput, QuestionAnswer, SessionPermission, SessionState, UiEvent } from '../../types/session'
 import type { WorkRun, WorkTask, ModelConfig, WorkApproval } from '../../types/workbench'
 import { getWorkbench, registerNativeLifecycle } from '../workbench/service'
@@ -29,14 +30,20 @@ import { ScheduleRunner } from '../schedule/runner'
 import { createSchedule, sessionSchedules, getSchedule, replaceSchedule, deleteSchedule, scheduleHistory } from '../schedule/store'
 import { sanitizeWorkspaceTurn, workspaceTurns, removeWorkspaceScratch } from './workspace-changes'
 import type { Mention } from '../../types/session'
+import { quickProject } from '../workbench/quick'
+import { webFetch, webSearch } from './web'
 
-type Job = { id: string; directory: string; input: PromptInput; attachments?: import('../../types/workbench').ContextItem[]; resolve: (value: { messageId: string }) => void; reject: (error: Error) => void; background?: { inboxId: string } }
+type Job = { id: string; directory: string; input: PromptInput; attachments?: import('../../types/workbench').ContextItem[]; resolve: (value: { messageId: string }) => void; reject: (error: Error) => void; background?: { inboxId: string }; reminder?: boolean }
+/** 一轮结束后预热的 Host 保留时长：下一句不必冷启动。 */
+export const WARM_KEEP_MS = 5 * 60_000
 /** L2 后台预分析的硬上限：只读、小额度、每个项目每天有限次数。 */
 export const PREANALYSIS_LIMITS = { maxRequests: 6, maxMinutes: 3, perProjectPerDay: 10, maxInputChars: 8000 }
 type Active = { id: string; directory: string; controller: AbortController; tools?: TaskTools; dataTools?: DataTools; transport?: HostTransport; poll?: (value: unknown) => void; failure?: string; cancel: boolean; closing: boolean; done: Promise<void>
   /** workspace/changes 事件序号 → 等待 Host 把摘要送回；关闭进程前必须收到或超时。 */
   workspace: Map<number, { settled: Promise<void>; settle: () => void }> }
 type Warm = { directory: string; signature: string; controller: AbortController; ready: Promise<void>; transport?: HostTransport; bridge?: Awaited<ReturnType<typeof createBridge>>; timer?: ReturnType<typeof setTimeout> }
+/** 随手问总是可联网；代码项目需在项目设置中单独开启。 */
+export function webEnabled(project: { builtin?: string; web?: boolean }): boolean { return project.builtin === 'quick' || project.web === true }
 export class HostManager {
   private initialized = false
   private closing = false
@@ -59,7 +66,8 @@ export class HostManager {
   /** 定时提醒：官方工具 + 官方时间规则，计时与投递在主进程。 */
   readonly schedules = new ScheduleRunner(this.runtimeRoot, (id, text) => this.deliverReminder(id, text), id => this.all().some(item => item.id === id && !item.hidden))
   readonly dataRoot = join(app.getPath('userData'), 'harness-sessions')
-  get busy(): boolean { return this.active.size > 0 || this.queue.length > 0 || this.warm.size > 0 || !!this.utility?.busy }
+  /** 预热的 Host 只是可随时回收的缓存，不算忙（否则保温期间会挡住备份与合并）。 */
+  get busy(): boolean { return this.active.size > 0 || this.queue.length > 0 || !!this.utility?.busy }
   structured<T>(request: StructuredRequest<T>): Promise<T> {
     this.utility ??= new UtilityHost(this.runtimeRoot, join(this.dataRoot, 'utility'), () => this.model())
     return this.utility.structured(request)
@@ -111,6 +119,23 @@ export class HostManager {
     if (!Number.isSafeInteger(afterSeq) || afterSeq < -1) throw new Error('事件游标无效')
     return this.projection(id).events(afterSeq)
   }
+  /** 侧栏置顶 / 归档；不改变会话内容。 */
+  setFlags(id: string, flags: { pinned?: boolean; archived?: boolean }): void {
+    const session = this.get(id)
+    updateSessionRecord(id, { ...session, ...(typeof flags.pinned === 'boolean' ? { pinned: flags.pinned } : {}), ...(typeof flags.archived === 'boolean' ? { archived: flags.archived, ...(flags.archived ? { pinned: false } : {}) } : {}) })
+    this.changed(id)
+  }
+  /** 彻底删除会话（含子会话、事件、回执、提醒与私有目录）；运行中的会话先停止。 */
+  async remove(id: string): Promise<void> {
+    const session = this.get(id)
+    if (session.hidden) throw new Error('后台会话会自动清理')
+    await this.stop(id); await this.dropWarm(id)
+    if (this.active.has(id) || this.queue.some(job => job.id === id)) throw new Error('会话仍在运行，请稍后再删除')
+    for (const approval of this.approvals.list().filter(item => item.taskId === id)) this.approvals.cancelRun(approval.runId)
+    const removed = deleteSessionFamily(id)
+    for (const value of removed) { this.projections.delete(value); await rm(join(this.dataRoot, value), { recursive: true, force: true }).catch(() => {}) }
+    this.schedules.arm(); this.changed(id)
+  }
   rename(id: string, title: string): void { updateSessionRecord(id, { ...this.get(id), title: outboundRedact(boundedText(title, '会话标题', 120, true)).text, customTitle: true }); this.changed(id) }
   async setPlanMode(id: string, value: boolean): Promise<void> {
     const session = this.get(id)
@@ -127,7 +152,7 @@ export class HostManager {
     this.initialize()
     if (this.closing) throw new Error('应用正在关闭')
     if (!['readonly', 'confirm', 'project_auto'].includes(input.permission)) throw new Error('会话权限无效')
-    const project = store.getProject(boundedText(input.projectId, '项目 ID', 100, true))
+    const project = input.projectId === store.QUICK_PROJECT_ID ? await quickProject() : store.getProject(boundedText(input.projectId, '项目 ID', 100, true))
     const directory = await getWorkbench().validateDirectory(project.directory)
     const id = randomUUID(), now = Date.now()
     createSessionRecord(id, project.id, { title: outboundRedact(boundedText(input.title ?? '新会话', '标题', 120, true)).text, permission: input.permission, state: 'idle', directory, createdAt: now })
@@ -143,11 +168,11 @@ export class HostManager {
   async deliverReminder(id: string, text: string): Promise<{ messageId: string }> {
     const session = this.get(id)
     if (session.hidden) throw new Error('后台会话不接收提醒')
-    const { pending } = await this.enqueue(id, { text, allowPossibleSecret: true })
+    const { pending } = await this.enqueue(id, { text, allowPossibleSecret: true }, true)
     pending.catch(() => {})
     return { messageId: `reminder-${randomUUID()}` }
   }
-  private async enqueue(id: string, input: PromptInput): Promise<{ pending: Promise<{ messageId: string }> }> {
+  private async enqueue(id: string, input: PromptInput, reminder = false): Promise<{ pending: Promise<{ messageId: string }> }> {
     const session = this.get(id)
     const text = boundedText(input.text, '消息', 100_000, true)
     if (findBlockingSecret(text)) throw new Error('检测到账号或密钥，消息尚未发送。请先在资源库保存，再使用资源引用。')
@@ -157,31 +182,47 @@ export class HostManager {
     const projectDirectory = await getWorkbench().validateDirectory(projectPath)
     if (directory !== session.directory || directory !== projectDirectory || store.getProject(session.projectId).directory !== projectPath) throw new Error('项目目录已改变，请新建会话')
     const references = await resolveMentions(input.mentions, new ProjectFiles(directory, [app.getPath('userData')]))
+    // 识图图片加密保存在本会话回执里；Host 只看到标记，桥接发送时才取出。
+    for (const image of references.images) saveSessionReceipt(id, `${id}:vision:${image.id}`, 'vision_image', 'saved', image)
     for (const mention of references.mentions) if (mention.kind === 'clipboard') getDatabase().prepare('INSERT OR IGNORE INTO wb_session_clipboard_refs(session_id,clipboard_id) VALUES(?,?)').run(id, mention.id)
     const attachments = await getWorkbench().preparedAttachments(input.attachmentIds ?? [])
     const attachmentText = attachments.map(item => `\n附件 ${item.title}（已脱敏文字快照）：\n${item.text}`).join('\n')
     if (this.closing || this.active.has(id) || this.queue.some(item => item.id === id)) throw new Error('会话正在运行或排队，请先停止')
-    const pending = new Promise<{ messageId: string }>((resolve, reject) => { this.queue.push({ id, directory, attachments, input: { text: text + references.context + attachmentText, mentions: references.mentions }, resolve, reject }) })
+    const pending = new Promise<{ messageId: string }>((resolve, reject) => { this.queue.push({ id, directory, attachments, input: { text: text + references.context + attachmentText, mentions: references.mentions }, resolve, reject, reminder }) })
     this.state(id, 'queued'); this.drain()
     return { pending }
   }
-  private available(directory: string, id?: string): boolean {
-    const occupied = [...this.active.values(), ...[...this.warm.entries()].filter(([key]) => key !== id && !this.active.has(key)).map(([, value]) => value)]
+  private available(directory: string): boolean {
+    const occupied = [...this.active.values()]
     return occupied.length < 2 && !occupied.some(item => within(item.directory, directory) || within(directory, item.directory))
+  }
+  /** 预热中的 Host 只是缓存：真正要运行的会话需要名额或目录时，先回收别的会话的预热进程。 */
+  private evictWarmFor(job: Job): void {
+    for (const [key, warmed] of this.warm) {
+      if (key === job.id || this.active.has(key)) continue
+      const overlap = within(warmed.directory, job.directory) || within(job.directory, warmed.directory)
+      const crowded = this.active.size + [...this.warm.keys()].filter(other => other !== job.id && !this.active.has(other)).length >= 2
+      if (overlap || crowded) void this.dropWarm(key)
+    }
   }
   private drain(): void {
     while (!this.closing && this.active.size < 2) {
       // 用户自己的会话优先；后台预分析只在没有用户任务排队时启动，且同一时间最多一个。
       const userWaiting = this.queue.some(job => !job.background)
       const backgroundActive = [...this.active.keys()].some(id => !!this.get(id).hidden)
-      const index = this.queue.findIndex(job => this.available(job.directory, job.id) && (!job.background || (!userWaiting && !backgroundActive)))
+      for (const job of this.queue) if (!job.background) this.evictWarmFor(job)
+      const index = this.queue.findIndex(job => this.available(job.directory) && (!job.background || (!userWaiting && !backgroundActive)))
       if (index < 0) break
       const job = this.queue.splice(index, 1)[0]!
       const warmed = this.warm.get(job.id)
       const active: Active = { id: job.id, directory: job.directory, controller: warmed?.controller ?? new AbortController(), cancel: false, closing: false, done: Promise.resolve(), workspace: new Map() }
       clearTimeout(warmed?.timer)
       this.active.set(job.id, active)
-      active.done = this.execute(job, active).finally(() => { this.active.delete(job.id); this.changed(job.id); this.drain() })
+      active.done = this.execute(job, active).finally(() => {
+        this.active.delete(job.id); this.changed(job.id); this.drain()
+        // 一轮正常结束后，在用户阅读回答时预热下一轮的 Host。
+        if (!job.background && !this.closing && isUnlocked() && this.all().find(item => item.id === job.id)?.state === 'idle') void this.prewarm(job.id).catch(() => {})
+      })
     }
   }
   private model(): ModelConfig {
@@ -236,6 +277,15 @@ export class HostManager {
       return { data: bytes.subarray(offset, offset + 65536).toString('base64'), done: offset + 65536 >= bytes.length }
     }
     if (operation === 'schedule') return this.scheduleControl(active.id, input)
+    if (operation === 'web_search' || operation === 'web_fetch') {
+      const session = this.get(active.id)
+      if (session.hidden || !webEnabled(store.getProject(session.projectId))) return { error: '本会话未开启联网' }
+      try {
+        const result = operation === 'web_search' ? await webSearch(String(input.query ?? ''), Number(input.maxResults), { signal }) : await webFetch(String(input.url ?? ''), { signal })
+        this.projection(active.id).add({ type: 'change', text: operation === 'web_search' ? `联网搜索：${outboundRedact(String(input.query)).text}` : `读取网页：${outboundRedact(String(input.url)).text}`, at: Date.now() }); this.changed(active.id)
+        return result
+      } catch (error) { return { error: outboundRedact(error instanceof Error ? error.message : '联网失败').text } }
+    }
     if (operation === 'workspace_changes' || operation === 'workspace_skip') {
       const seq = Number(input.seq)
       if (!Number.isSafeInteger(seq) || seq < 0) throw new Error('工作区变更序号无效')
@@ -278,7 +328,9 @@ export class HostManager {
   private gitEnvironment(session: HostSessionSummary): Record<string, string> {
     if (session.hidden) return {}
     const git = findGit()
-    return { CV_SCHEDULE: '1', ...(git ? { CV_GIT_PATH: git } : {}) }
+    // 「关于我」只以脱敏后的文字进入 Host 的系统提示，不落盘。
+    const about = outboundRedact(store.getAboutMe()).text.slice(0, store.ABOUT_ME_LIMIT)
+    return { CV_SCHEDULE: '1', ...(git ? { CV_GIT_PATH: git } : {}), ...(webEnabled(store.getProject(session.projectId)) ? { CV_WEB: '1' } : {}), ...(about ? { CV_ABOUT_ME: about } : {}) }
   }
   private scheduleControl(sessionId: string, input: Record<string, unknown>): unknown {
     const id = typeof input.id === 'string' ? input.id : ''
@@ -333,8 +385,16 @@ export class HostManager {
         if (!store.getProject(session.projectId).preanalysis) throw new Error('项目已关闭预分析')
         saveSessionReceipt(job.id, randomUUID(), 'preanalysis_consent', 'project_setting', { projectId: project.id, inboxId: job.background.inboxId, limits: { maxRequests: model.maxRequests, maxMinutes: model.maxMinutes } })
         updateInboxAnalysis(job.background.inboxId, { state: 'running', at: Date.now() })
-      } else await this.approvals.request({ taskId: job.id, runId: job.id, operation: '发送消息并使用项目上下文', target: model.endpoint,
-        description: `模型：${model.model}\n项目：${project.name}\n目录：${active.directory}\n本轮最多 ${model.maxRequests} 次请求、${model.maxMinutes} 分钟。\n${job.input.text}` }, { model, modelVersion, input: job.input }, signal)
+      } else {
+        // 同一会话只确认一次发送；模型、地址、项目、权限或计划模式变化后重新确认。定时提醒每次都确认。
+        const web = webEnabled(project)
+        const consent = fingerprint(JSON.stringify({ model: model.model, endpoint: model.endpoint, modelVersion, projectId: project.id, directory: active.directory, permission: session.permission, planMode: session.planMode ?? false, web }))
+        if (job.reminder || !sessionReceipts(job.id).some(item => item.operation === 'send_consent' && item.id === consent)) {
+          await this.approvals.request({ taskId: job.id, runId: job.id, operation: '发送消息并使用项目上下文', target: model.endpoint,
+            description: `模型：${model.model}\n项目：${project.name}\n目录：${active.directory}\n本轮最多 ${model.maxRequests} 次请求、${model.maxMinutes} 分钟。${web ? '\n可联网搜索与读取公开网页（由本应用代为访问，拒绝局域网地址）。' : ''}${job.reminder ? '' : '\n本会话后续消息不再询问；写文件、命令和资源仍逐次确认。'}\n${job.input.text}` }, { model, modelVersion, input: job.input }, signal)
+          if (!job.reminder) saveSessionReceipt(job.id, consent, 'send_consent', 'allowed', { model: model.model, endpoint: model.endpoint, at: Date.now() })
+        }
+      }
       this.state(job.id, 'running')
       const home = join(this.dataRoot, job.id), checks = join(this.dataRoot, 'checks')
       await mkdir(home, { recursive: true }); await mkdir(checks, { recursive: true })
@@ -351,7 +411,7 @@ export class HostManager {
       const warmed = this.warm.get(job.id)
       if (warmed && warmed.signature !== JSON.stringify({ model, modelVersion })) throw new Error('预热后模型设置已改变，请重新发送消息')
       if (warmed) await warmed.ready
-      bridge = warmed?.bridge ?? await createBridge({ model, signal, streaming: true, secrets: allResourceSecrets, session: input => sessionFamilyOperation(job.id, input),
+      bridge = warmed?.bridge ?? await createBridge({ model, signal, streaming: true, secrets: allResourceSecrets, session: input => sessionFamilyOperation(job.id, input), ...this.vision(job.id),
         control: (operation, input) => this.control(active, operation, input), modelKey: () => store.readResourceField(model.resourceId!, model.field, modelVersion),
         tool: (operation, args, scope) => this.scopedTool(active, operation, args, scope) })
       signal.throwIfAborted()
@@ -404,12 +464,12 @@ export class HostManager {
     if (this.closing || this.active.has(id) || this.warm.has(id) || this.queue.some(job => job.id === id)) return
     const directory = await getWorkbench().validateDirectory(session.directory)
     const manifest = await verifyRuntime(this.runtimeRoot), model = this.model(), modelVersion = store.getResource(model.resourceId!).version
-    if (this.closing || this.active.has(id) || this.warm.has(id) || !this.available(directory)) return
+    if (this.closing || this.active.has(id) || this.warm.has(id) || !this.available(directory) || this.active.size + this.warm.size >= 2) return
     const home = join(this.dataRoot, id), warmed: Warm = { directory, signature: JSON.stringify({ model, modelVersion }), controller: new AbortController(), ready: Promise.resolve() }
     this.warm.set(id, warmed)
     warmed.ready = (async () => {
       await mkdir(home, { recursive: true })
-      warmed.bridge = await createBridge({ model, streaming: true, signal: warmed.controller.signal, secrets: allResourceSecrets,
+      warmed.bridge = await createBridge({ model, streaming: true, signal: warmed.controller.signal, secrets: allResourceSecrets, ...this.vision(id),
         session: input => sessionFamilyOperation(id, input), modelKey: () => store.readResourceField(model.resourceId!, model.field, modelVersion),
         control: (operation, input) => {
           const active = this.active.get(id)
@@ -429,7 +489,7 @@ export class HostManager {
       this.warm.delete(id); warmed.controller.abort()
       await warmed.transport?.close(); await warmed.bridge?.close(); this.drain()
     }
-    try { await warmed.ready; warmed.timer = setTimeout(() => { void discard() }, 30_000); warmed.timer.unref() }
+    try { await warmed.ready; warmed.timer = setTimeout(() => { void discard() }, WARM_KEEP_MS); warmed.timer.unref() }
     catch (error) { await discard(); throw error }
   }
   /**
@@ -463,6 +523,27 @@ export class HostManager {
     void new Promise<{ messageId: string }>((resolve, reject) => { this.queue.push({ id, directory, input: { text }, resolve, reject, background: { inboxId } }) }).catch(() => {})
     this.state(id, 'queued'); this.drain()
     return true
+  }
+  /** 识图：桥接按图片 ID 取回本会话加密保存的图片；模型拒收图片时在会话里说明一次。 */
+  private vision(id: string): { images: (imageId: string) => VisionImage | undefined; onVisionFallback: () => void } {
+    let noted = false
+    return {
+      images: imageId => { const receipt = /^[a-f0-9]{16}$/.test(imageId) ? sessionReceipt(id, `${id}:vision:${imageId}`) : undefined; return receipt?.operation === 'vision_image' ? receipt.data as unknown as VisionImage : undefined },
+      onVisionFallback: () => { if (noted) return; noted = true; this.projection(id).add({ type: 'change', text: '当前模型不支持识图，已改用图片中的文字继续', at: Date.now() }); this.changed(id) }
+    }
+  }
+  /** 当前保温中的 Host 数量（只读，供界面与测试观察）。 */
+  get warming(): number { return [...this.warm.keys()].filter(id => !this.active.has(id)).length }
+  /** 回收一个未在运行的预热 Host；不读资料库，锁库后也能安全调用。 */
+  private async dropWarm(id: string): Promise<void> {
+    const warmed = this.warm.get(id)
+    if (!warmed || this.active.has(id)) return
+    this.warm.delete(id); clearTimeout(warmed.timer); warmed.controller.abort()
+    await warmed.ready.catch(() => {}); await warmed.transport?.close(); await warmed.bridge?.close()
+  }
+  /** 回收所有未在运行的预热 Host（设置变化后调用）。 */
+  async discardWarm(): Promise<void> {
+    await Promise.all([...this.warm.keys()].filter(id => !this.queue.some(job => job.id === id)).map(id => this.dropWarm(id)))
   }
   async stop(id: string): Promise<void> {
     this.get(id)
@@ -519,7 +600,7 @@ export class HostManager {
     await this.utility?.shutdown()
     for (const job of this.queue.splice(0)) { job.reject(new Error('应用正在关闭')); this.state(job.id, 'stopped') }
     await Promise.all([...this.active.keys()].map(id => this.stop(id)))
-    await Promise.all([...this.warm.keys()].map(id => this.stop(id)))
+    await Promise.all([...this.warm.keys()].map(id => this.dropWarm(id)))
   }
 }
 let instance: HostManager | undefined
