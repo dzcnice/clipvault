@@ -6,6 +6,8 @@ import { boundedText, parseResourceText, resourceEndpoint } from '../workbench/i
 import { endpointURL } from '../workbench/bridge'
 import { getClipboardMonitor } from '../clipboard/monitor'
 import { openMergeBackup } from '../backup-merge'
+import { detectLegacyProfile, legacyAlreadyMerged, legacyProfileDir, legacySourceIdentity, prepareLegacyImport } from '../legacy-import'
+import { backfillClipCategories } from '../clipboard/classify-backfill'
 import { basename } from 'node:path'
 import { openLoginAssistant } from '../workbench/login'
 import { templates, saveTemplate, deleteTemplate, taskHandoff } from '../workbench/daily'
@@ -39,7 +41,7 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
       const result = await dispatch(method, payload)
       // 预热中的 Host 带着旧的模型与项目设置：设置一变就回收，下一句按新设置启动。
       if (['saveModelService', 'saveModel', 'saveProject', 'saveResource', 'revokeResource', 'saveJarvisSettings'].includes(method)) void getHostManager().discardWarm().catch(() => {})
-      if (!['snapshot', 'task', 'parseResource', 'chooseDirectory', 'quickIndex', 'inbox', 'inboxMuted', 'resourceHealth', 'recall', 'prepareOrganize', 'modelService', 'listModels', 'legacyCredentials', 'jarvisSettings'].includes(method) && !window.isDestroyed()) window.webContents.send('workbench:changed')
+      if (!['snapshot', 'task', 'parseResource', 'chooseDirectory', 'quickIndex', 'inbox', 'inboxMuted', 'resourceHealth', 'recall', 'prepareOrganize', 'modelService', 'listModels', 'legacyCredentials', 'jarvisSettings', 'legacyProfile'].includes(method) && !window.isDestroyed()) window.webContents.send('workbench:changed')
       return { success: true, data: result }
     } catch (error) { return { success: false, error: outboundRedact(error instanceof Error ? error.message : '操作失败，请重试').text } }
   }))
@@ -84,6 +86,39 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
           if (workbenchBusy()) throw new Error('确认期间启动了会话，请先停止再合并资料')
           return source.merge()
         } finally { source.close() }
+      }
+      case 'legacyProfile': {
+        const profile = detectLegacyProfile(), record = store.legacyImportRecord()
+        // 以前合并过同一份原版资料（例如手动转换的备份）也算已导入，避免重复提示。
+        const merged = !!profile && !record && await legacyAlreadyMerged(profile, identity => store.hasMergeIndex(identity))
+        return { found: !!profile, dir: profile?.dir ?? legacyProfileDir(), bytes: profile?.bytes ?? 0, imported: record ?? (merged ? { at: 0, clipboard: 0, credentials: 0, images: 0 } : null) }
+      }
+      case 'importLegacy': {
+        if (workbenchBusy()) throw new Error('请先停止当前会话，再导入原版资料')
+        const input = (payload ?? {}) as { password?: string; choose?: boolean }
+        if (input.password !== undefined && (typeof input.password !== 'string' || input.password.length > 1024)) throw new Error('主密码格式无效')
+        let profile = input.choose ? null : detectLegacyProfile()
+        if (!profile) {
+          const selected = await dialog.showOpenDialog(window, { title: '选择原版 ClipVault 的资料目录（里面有 clipvault.db 和 Local State）', defaultPath: legacyProfileDir(), properties: ['openDirectory'] })
+          if (selected.canceled || !selected.filePaths[0]) return null
+          profile = detectLegacyProfile(selected.filePaths[0])
+          if (!profile) throw new Error('这个目录里没有原版 ClipVault 资料（需要 clipvault.db 与 Local State）')
+        }
+        const prepared = await prepareLegacyImport(profile, { password: input.password || undefined })
+        try {
+          const source = openMergeBackup(prepared.path, input.password || undefined, prepared.key)
+          try {
+            const p = source.preview, before = prepared.key ? store.hasMergeIndex(legacySourceIdentity(prepared.key)) : false
+            const confirm = await dialog.showMessageBox(window, { type: before ? 'warning' : 'question', title: '从原版 ClipVault 导入', message: `导入剪贴板 ${p.clipboard} 条、凭证 ${p.credentials} 条、图片 ${prepared.images} 张`,
+              detail: `来源：${profile.dir}\n原版资料只读、不会修改；当前记录不会被覆盖，重复导入会跳过。${prepared.missingImages ? `\n有 ${prepared.missingImages} 张图片的原文件已不存在，将保留记录并说明缺失。` : ''}\n导入前会先备份当前资料。导入后可以在资源库一键把凭证并入资源。${before ? '\n\n注意：这份原版资料以前已经合并过；同样的记录会跳过，但格式不同的旧副本可能出现重复。' : ''}`, buttons: ['取消', '开始导入'], defaultId: 1, cancelId: 0 })
+            if (confirm.response !== 1) return null
+            if (workbenchBusy()) throw new Error('确认期间启动了会话，请先停止再导入')
+            const summary = source.merge()
+            store.saveLegacyImportRecord({ at: Date.now(), clipboard: summary.clipboard, credentials: summary.credentials, images: prepared.images })
+            void backfillClipCategories().catch(() => {})
+            return { ...summary, images: prepared.images }
+          } finally { source.close() }
+        } finally { prepared.cleanup() }
       }
       case 'chooseDirectory': {
         const selected = await dialog.showOpenDialog(window, { title: '选择代码项目目录', properties: ['openDirectory'] })

@@ -15,7 +15,8 @@ export interface MergeSummary { clipboard: number; credentials: number; resource
 const exists = (db: Database.Database, table: string): boolean => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)
 const digest = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex')
 
-export function openMergeBackup(path: string, password?: string): { preview: MergeSummary; merge: () => MergeSummary; close: () => void } {
+/** providedKey：已知源库数据钥匙时直接使用（从原版 ClipVault 导入），否则按备份元数据与密码解出。 */
+export function openMergeBackup(path: string, password?: string, providedKey?: Buffer): { preview: MergeSummary; merge: () => MergeSummary; close: () => void } {
   const info = lstatSync(path)
   if (!info.isFile() || info.isSymbolicLink() || info.size > 768 * 1024 * 1024) throw new Error('备份必须是 768 MB 以内的普通文件')
   const source = new Database(path, { readonly: true, fileMustExist: true })
@@ -27,7 +28,7 @@ export function openMergeBackup(path: string, password?: string): { preview: Mer
     if (getCurrentVersion(source) > (MIGRATIONS.at(-1)?.version ?? 0)) throw new Error('备份版本高于当前应用')
     const meta = source.prepare('SELECT salt,iv,auth_tag,encrypted_dek,mode FROM vault_meta WHERE id=1').get() as BackupMeta | undefined
     if (!meta) throw new Error('备份缺少加密信息')
-    key = backupKey(meta, password)
+    key = providedKey ? Buffer.from(providedKey) : backupKey(meta, password)
     if (key.length !== 32) throw new Error('备份密钥无效')
     const decrypt = (payload: string): string => {
       const parts = payload.split(':').map(value => Buffer.from(value, 'base64'))
