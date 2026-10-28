@@ -3,7 +3,7 @@ import * as store from '../../db/workbench-store'
 import { insertAuditRecord } from '../../db/credential-audit-store'
 import { getClipboardMonitor } from '../clipboard/monitor'
 import { clipboardAutoClear } from '../clipboard/auto-clear'
-import { pasteToActiveApp } from '../clipboard/paste-active'
+import { pasteToActiveApp, sendKeysToActiveApp } from '../clipboard/paste-active'
 import { onVaultLocked } from '../crypto/vault'
 import { getPrefs } from '../prefs'
 import { outboundRedact } from '../workbench/redaction'
@@ -30,7 +30,9 @@ export function copyResourceField(id: string, name: string, version: number): vo
   if (field.secret && getPrefs().autoClearTtlMs > 0) clipboardAutoClear.schedule(value, getPrefs().autoClearTtlMs)
   used(id, name)
 }
-interface SequenceIO { read(): string; write(value: string): void; paste(): Promise<{ ok: boolean; error?: string }>; notify(state: ResourceSequenceState): void }
+interface SequenceIO { read(): string; write(value: string): void; paste(): Promise<{ ok: boolean; error?: string }>; notify(state: ResourceSequenceState): void
+  /** 自动输入：在前台窗口按 Tab 再粘贴（不按回车）。 */
+  tabPaste?(): Promise<{ ok: boolean; error?: string }> }
 export class ResourceSequence {
   private queue: Array<{ name: string; role: FieldRole }> = []
   private id = ''; private version = 0; private previous = ''; private last = ''; private expiresAt = 0
@@ -68,13 +70,37 @@ export class ResourceSequence {
     } catch (error) { this.finish(); this.error = error instanceof Error ? error.message : '依次粘贴未完成'; this.io.notify(this.state()); throw new Error(this.error) }
     finally { this.pasting = false }
   }
+  /**
+   * 自动输入：用户名 → Tab → 密码，一次完成；不提交表单。
+   * 有验证码种子时留在队列里，按 Alt+Shift+V 再粘贴当时的验证码（60 秒内）。
+   */
+  async autoType(id: string): Promise<ResourceSequenceState> {
+    const resource = store.getResource(id)
+    const user = resource.fields.find(field => field.role === 'username'), pass = resource.fields.find(field => field.role === 'password')
+    if (!user || !pass) throw new Error('这个资源缺少用户名或密码字段，请改用依次粘贴')
+    if (!this.io.tabPaste) throw new Error('当前系统不支持自动输入')
+    await this.start(id)
+    if (this.queue[0]?.role !== 'password') return this.state()
+    this.pasting = true; clearTimeout(this.timer)
+    try {
+      this.last = store.readResourceField(this.id, pass.name, this.version)
+      this.io.write(this.last)
+      const result = await this.io.tabPaste()
+      if (!result.ok) throw new Error('未能输入密码，请按 Alt+Shift+V 继续或返回资源页复制')
+      used(this.id, pass.name); this.queue.shift()
+      if (!this.queue.length) this.finish()
+      else { this.expiresAt = Date.now() + 60_000; this.timer = setTimeout(() => this.finish(), 60_000); this.timer.unref(); this.io.notify(this.state()) }
+    } catch (error) { this.finish(); this.error = error instanceof Error ? error.message : '自动输入未完成'; this.io.notify(this.state()); throw new Error(this.error) }
+    finally { this.pasting = false }
+    return this.state()
+  }
   finish(): void {
     clearTimeout(this.timer)
     if (this.id && this.io.read() === this.last) this.io.write(this.previous)
     this.id = ''; this.queue = []; this.previous = ''; this.last = ''; this.expiresAt = 0
   }
 }
-export const resourceSequence = new ResourceSequence({ read: () => clipboard.readText(), write: value => { clipboardAutoClear.cancel(); getClipboardMonitor().writeText(value) }, paste: pasteToActiveApp,
+export const resourceSequence = new ResourceSequence({ read: () => clipboard.readText(), write: value => { clipboardAutoClear.cancel(); getClipboardMonitor().writeText(value) }, paste: pasteToActiveApp, tabPaste: () => sendKeysToActiveApp(['tab', 'paste']),
   notify: state => {
     void import('../shortcuts/manager').then(({ shortcutManager }) => {
       const shortcut = shortcutManager.list().find(item => item.commandId === 'resource.pasteNext')

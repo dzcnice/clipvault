@@ -12,7 +12,9 @@ import { wrapHandler } from './utils'
 import { logger } from '../utils/logger'
 import { backfillClipboardEncryption } from '../../db/clipboard-store'
 import { suspendWorkbench } from '../workbench/service'
-import { backfillClipCategories } from '../clipboard/classify-backfill'
+import { suggestForClipboard } from '../inbox/rules'
+import { getClipboardItemById } from '../../db/clipboard-store'
+import { backfillClipCategories, reclassifyAccountStrings } from '../clipboard/classify-backfill'
 import { startInboxMaintenance, refreshLocalSuggestions } from '../inbox/maintenance'
 
 /**
@@ -43,6 +45,7 @@ function triggerClipboardBackfill(): void {
         )
       }
       await backfillClipCategories()
+      await reclassifyAccountStrings(id => { const item = getClipboardItemById(id); if (item) suggestForClipboard(item) }).catch(error => logger.warn('[Backfill] 账号串重新分类未完成：' + String(error)))
       startInboxMaintenance(); refreshLocalSuggestions()
     })
     .catch((err) => {

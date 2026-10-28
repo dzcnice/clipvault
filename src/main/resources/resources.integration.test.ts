@@ -89,4 +89,21 @@ describe('native resource intake and sequence', () => {
     await sequence.start(resource.id); fixture.clipboard = 'new external copy'; sequence.finish(); expect(fixture.clipboard).toBe('new external copy')
     await sequence.start(resource.id); store.saveResource({ ...resource, expectedVersion: resource.version, fields: [] }); await expect(sequence.next()).rejects.toThrow('版本已变化'); expect(sequence.state().active).toBe(false)
   })
+  it('auto-types username, Tab and password without submitting, then leaves the TOTP code for the next hotkey', async () => {
+    const resource = store.saveResource({ name: 'GitHub', kind: 'account', environment: 'dev', endpoint: 'https://github.com', loginUrl: 'https://github.com/login', fields: [
+      { name: 'username', value: username, secret: false }, { name: 'password', value: password, secret: true }, { name: 'totp', value: seed, secret: true, role: 'totp_seed' }] })
+    fixture.clipboard = 'previous clipboard'
+    const typed: string[] = []
+    const sequence = new ResourceSequence({ read: () => fixture.clipboard, write: value => { fixture.clipboard = value },
+      paste: async () => { typed.push(`paste:${fixture.clipboard}`); return { ok: true } },
+      tabPaste: async () => { typed.push(`tab+paste:${fixture.clipboard}`); return { ok: true } }, notify: () => {} })
+    const state = await sequence.autoType(resource.id)
+    expect(typed).toEqual([`paste:${username}`, `tab+paste:${password}`])
+    expect(state).toMatchObject({ active: true, nextRole: 'totp_seed', remaining: 1 })
+    await sequence.next()
+    expect(typed.at(-1)).toMatch(/^paste:\d{6}$/)
+    expect(sequence.state().active).toBe(false); expect(fixture.clipboard).toBe('previous clipboard')
+    const noPassword = store.saveResource({ name: 'Token only', kind: 'api', environment: 'dev', fields: [{ name: 'token', value: 'synthetic-token-value', secret: true }] })
+    await expect(sequence.autoType(noPassword.id)).rejects.toThrow('缺少用户名或密码')
+  })
 })

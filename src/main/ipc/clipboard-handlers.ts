@@ -5,7 +5,7 @@
  */
 
 import { ipcMain, BrowserWindow, clipboard } from 'electron'
-import { IPC_CHANNELS } from '../../types'
+import { IPC_CHANNELS, ClipboardContentType } from '../../types'
 import * as clipboardStore from '../../db/clipboard-store'
 import { getClipboardMonitor, ClipboardChangeEvent } from '../clipboard/monitor'
 import { wrapHandler, wrapUnlockedHandler } from './utils'
@@ -16,6 +16,8 @@ import { suggestForClipboard } from '../inbox/rules'
 import { getHostManager } from '../harness-host/manager'
 import { getImagePasteMode, getPrefs, setPrefs } from '../prefs'
 import { exportImagePath, cleanupImageExports } from '../storage/image-store'
+import { emitCaptured } from '../clipboard/captured'
+import { captureScreenRegion } from '../jarvis/capture'
 import type {
   ClipboardFilter,
   ClipboardItem,
@@ -78,6 +80,7 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
           // L2：仅在项目显式开启时排队后台只读预分析；失败不影响复制本身。
           if (inboxId) void getHostManager().preanalyze(inboxId).catch(() => logger.warn('[inbox] 预分析未能排队'))
         } catch { logger.warn('[inbox] 无法为本次复制生成建议') }
+        emitCaptured(item)
       }
 
       // 截图/图片：按用户偏好写回。落盘期间若用户又复制了别的内容，禁止覆盖。
@@ -350,6 +353,26 @@ export function registerClipboardHandlers(mainWindow: BrowserWindow): void {
     })
   )
 
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_GET_IMAGE, wrapUnlockedHandler(async (_event, id: string): Promise<ApiResponse<string | null>> => {
+    try {
+      const imagePath = typeof id === 'string' ? clipboardStore.getClipboardImagePath(id) : null
+      if (!imagePath) return { success: true, data: null }
+      const { loadThumbnailAsDataUrl } = await import('../storage/image-store')
+      return { success: true, data: await loadThumbnailAsDataUrl(imagePath, 1800) }
+    } catch (error) { return { success: false, error: (error as Error).message } }
+  }))
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_SAVE_PASTED_IMAGE, wrapUnlockedHandler(async (_event, dataUrl: string): Promise<ApiResponse<ClipboardItem>> => {
+    try {
+      if (typeof dataUrl !== 'string' || dataUrl.length > 28_000_000 || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) throw new Error('只支持 30 MB 以内的 PNG / JPEG / WebP / GIF 图片')
+      const item = await clipboardStore.addClipboardItem({ type: ClipboardContentType.IMAGE, imageData: dataUrl, sourceApp: 'ClipVault' }, undefined, 'personal')
+      if (!item) throw new Error('图片未能保存')
+      emitCaptured(item)
+      return { success: true, data: item }
+    } catch (error) { return { success: false, error: (error as Error).message } }
+  }))
+  ipcMain.handle(IPC_CHANNELS.JARVIS_CAPTURE, wrapUnlockedHandler(async (): Promise<ApiResponse<string | null>> => {
+    try { return { success: true, data: await captureScreenRegion() } } catch (error) { return { success: false, error: (error as Error).message } }
+  }))
   ipcMain.handle(
     IPC_CHANNELS.CLIPBOARD_GET_THUMBNAIL,
     wrapHandler(async (_event, id: string): Promise<ApiResponse<string | null>> => {

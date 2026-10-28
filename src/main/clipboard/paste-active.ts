@@ -40,3 +40,19 @@ export async function pasteToActiveApp(): Promise<{ ok: boolean; error?: string 
     return { ok: false, error: msg }
   }
 }
+
+/** 只允许的按键：粘贴、Tab。不提供回车，避免替用户提交表单。 */
+const KEYS = { paste: '^v', tab: '{TAB}' } as const
+export async function sendKeysToActiveApp(keys: Array<keyof typeof KEYS>): Promise<{ ok: boolean; error?: string }> {
+  if (process.platform !== 'win32') return { ok: false, error: '自动输入目前仅支持 Windows' }
+  if (!keys.length || keys.some(key => !(key in KEYS))) return { ok: false, error: '按键无效' }
+  const script = [`$ErrorActionPreference = 'Stop'`, 'Add-Type -AssemblyName System.Windows.Forms', 'Start-Sleep -Milliseconds 120',
+    ...keys.flatMap(key => [`[System.Windows.Forms.SendKeys]::SendWait('${KEYS[key]}')`, 'Start-Sleep -Milliseconds 60'])].join('\n')
+  try {
+    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 4000, windowsHide: true })
+    return { ok: true }
+  } catch (err) {
+    logger.warn(`[paste-active] send keys failed: ${(err as Error).message}`)
+    return { ok: false, error: (err as Error).message }
+  }
+}

@@ -1,7 +1,7 @@
 import type { FieldRole } from '../../types/workbench'
 export const fieldRoles: FieldRole[] = ['username', 'password', 'api_key', 'token', 'totp_seed', 'host', 'port', 'database', 'connection_string', 'other']
 export function inferRole(name: string, value = ''): FieldRole {
-  if (/totp|otp.?secret|authenticator|二步|动态口令/i.test(name) || value.startsWith('otpauth://')) return 'totp_seed'
+  if (/totp|otp.?secret|authenticator|二步|动态口令|验证码种子/i.test(name) || value.startsWith('otpauth://')) return 'totp_seed'
   if (/password|passwd|pwd|密码/i.test(name)) return 'password'
   if (/api.?key|密钥|^key$/i.test(name)) return 'api_key'
   if (/token|令牌/i.test(name)) return 'token'

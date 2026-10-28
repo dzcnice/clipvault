@@ -1,4 +1,5 @@
 import { scanSecrets } from '../workbench/secret-scan'
+import { looksLikeAccountList } from './account-combo'
 import type { ClipCategory } from '../../types/clipboard'
 import type { WorkProject } from '../../types/workbench'
 export type { ClipCategory } from '../../types/clipboard'
@@ -9,6 +10,7 @@ export function classifyClip(input: { type: string; text: string; sourceApp?: st
   if (input.type === 'image') return result('image', '图片格式')
   if (/otpauth:\/\//i.test(text) || scanSecrets(text, []).some(hit => hit.kind === 'format')) return result('secret', '密钥或验证码种子格式')
   if (/(?:username|user|account|email|用户名|账号|邮箱)["']?\s*[:=：]/i.test(text) && /(?:password|passwd|pwd|密码)["']?\s*[:=：]/i.test(text) && !/\b(?:interface|type|def|function)\b/.test(text)) return result('credential', '包含账号与密码字段')
+  if (looksLikeAccountList(text)) return result('credential', '账号串（账号|密码 等格式）')
   if (/\b(?:TypeError|ReferenceError|SyntaxError|RangeError|Exception|Error):|\bTraceback\b|\bat\s+\S+\s*\([^\n]+:\d+[:)]|npm ERR!|error TS\d+|\bpanic:|\b[A-Z]\w*Exception\b|^ERROR\s+\d+/m.test(text)) return result('error', '报错或堆栈格式')
   if (/^https?:\/\/[^\s]+$/i.test(text) || /^mailto:[^\s]+@[^\s]+$/i.test(text)) return result('link', '完整链接')
   if (input.type === 'file' || /^(?:[A-Z]:[\\/]|\\\\[^\\]+\\|\/[^\s]+|\.\.?\/[^\s]+)[^\r\n]*$/i.test(text)) return result('path', '文件路径')
