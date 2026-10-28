@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
-import { MessageSquarePlus, ClipboardList, Inbox, KeyRound, Ellipsis, Settings, PanelLeftClose, PanelLeftOpen, Search, History } from 'lucide-react'
+import { MessageSquarePlus, ClipboardList, Inbox, KeyRound, Ellipsis, Settings, PanelLeftClose, PanelLeftOpen, Search, History, Pin, PinOff, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { useConfirm } from '../components/ConfirmDialog'
 import TitleBar from '../components/TitleBar'
 import ClipIsland from '../components/ClipIsland'
 import { SidebarUpdateButton } from '../components/SidebarUpdateButton'
@@ -24,6 +25,8 @@ export default function MainLayout(): JSX.Element {
   const [inboxCount, setInboxCount] = useState(0), [legacy, setLegacy] = useState<WorkTask[]>([])
   const navRef = useRef<HTMLElement>(null), glideRef = useRef<HTMLSpanElement>(null)
 
+  // Alt+Shift+S 截图问 AI：浮窗不可用时回到主窗口，带着截图开一个新会话草稿。
+  useEffect(() => window.api.clipboard?.onCapture?.(id => navigate('/sessions', { state: { mentions: [{ kind: 'clipboard', id, label: '截图 / 图片' }], text: '这张截图里有什么？' } })), [navigate])
   useEffect(() => { let alive = true; const update = (): void => { void window.api.workbench?.inbox?.().then(result => { if (alive && result.success && result.data) setInboxCount(result.data.length) }).catch(() => {}) }; update(); const off = window.api.workbench?.onInboxChanged?.(update); return () => { alive = false; off?.() } }, [])
   useEffect(() => {
     let alive = true
@@ -52,7 +55,29 @@ export default function MainLayout(): JSX.Element {
     glide.style.opacity = active ? '1' : '0'
   }, [location.pathname, collapsed])
 
-  const groups = [...new Set(sessions.map(item => item.projectId))]
+  const visible = sessions.filter(item => !item.archived), pinned = visible.filter(item => item.pinned), archived = sessions.filter(item => item.archived)
+  const groups = [...new Set(visible.filter(item => !item.pinned).map(item => item.projectId))]
+  const confirm = useConfirm()
+  const sessionAction = (action: () => Promise<unknown>): void => { void action().catch(err => setError(err instanceof Error ? err.message : '操作失败')) }
+  const remove = (item: HostSessionSummary): void => sessionAction(async () => {
+    if (!await confirm({ title: '删除会话', message: `「${item.title}」的消息、执行记录和提醒都会删除，不能恢复。项目文件不受影响。`, confirmText: '删除', variant: 'danger' })) return
+    await window.sessionAPI.remove(item.id)
+    if (location.pathname === '/sessions/' + item.id) navigate('/sessions')
+  })
+  const row = (item: HostSessionSummary, index: number): JSX.Element => <div key={item.id} className="group relative">
+    <NavLink title={stateText[item.state]} to={'/sessions/' + item.id} style={{ '--i': index } as React.CSSProperties}
+      className={({ isActive }) => `cv-rise flex h-8 items-center gap-2.5 rounded-[9px] pl-2.5 pr-2 text-[13px] transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]' : 'text-[var(--ink-soft)] hover:bg-[var(--hover)]'}`}>
+      <span aria-label={stateText[item.state]} className={`cv-dot ${dotClass(item.state)}`} /><span className="min-w-0 flex-1 truncate">{item.title}</span>
+      {item.pendingApprovals > 0 && <span className="font-mono text-[11px] text-[var(--state-waiting)] group-hover:hidden">{item.pendingApprovals}</span>}
+    </NavLink>
+    <span className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-[7px] bg-[var(--surface)] p-0.5 shadow-[var(--shadow-sm)] group-hover:flex group-focus-within:flex">
+      {item.archived ? <button type="button" title="取消归档" aria-label={`取消归档 ${item.title}`} className="grid h-6 w-6 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]" onClick={() => sessionAction(() => window.sessionAPI.setFlags({ sessionId: item.id, archived: false }))}><ArchiveRestore size={13} strokeWidth={1.8} /></button> : <>
+        <button type="button" title={item.pinned ? '取消置顶' : '置顶'} aria-label={`${item.pinned ? '取消置顶' : '置顶'} ${item.title}`} className="grid h-6 w-6 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]" onClick={() => sessionAction(() => window.sessionAPI.setFlags({ sessionId: item.id, pinned: !item.pinned }))}>{item.pinned ? <PinOff size={13} strokeWidth={1.8} /> : <Pin size={13} strokeWidth={1.8} />}</button>
+        <button type="button" title="归档" aria-label={`归档 ${item.title}`} className="grid h-6 w-6 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]" onClick={() => sessionAction(() => window.sessionAPI.setFlags({ sessionId: item.id, archived: true }))}><Archive size={13} strokeWidth={1.8} /></button>
+      </>}
+      <button type="button" title="删除" aria-label={`删除 ${item.title}`} className="grid h-6 w-6 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--bad-soft)] hover:text-[var(--destructive)]" onClick={() => remove(item)}><Trash2 size={13} strokeWidth={1.8} /></button>
+    </span>
+  </div>
   return <div className="cv-app-shell bg-[var(--background)]">
     <ClipIsland />
     <TitleBar />
@@ -78,14 +103,12 @@ export default function MainLayout(): JSX.Element {
         {!collapsed && <nav aria-label="会话列表" className="-mx-1 mt-5 min-h-0 flex-1 overflow-y-auto px-1 pb-4">
           {error && <p role="alert" className="px-2.5 text-xs text-[var(--ink-faint)]">{error}</p>}
           {!sessions.length && !error && <p className="px-2.5 text-xs leading-relaxed text-[var(--ink-faint)]">开始一次会话，历史会保存在这里。</p>}
+          {pinned.length > 0 && <section className="mb-4"><h2 className="mb-1 flex items-center gap-1.5 px-2.5 text-xs text-[var(--ink-faint)]"><Pin size={11} strokeWidth={2} />置顶</h2>{pinned.map(row)}</section>}
           {groups.map(projectId => <section key={projectId} className="mb-4">
             <h2 className="mb-1 truncate px-2.5 text-xs text-[var(--ink-faint)]">{projects.find(item => item.id === projectId)?.name ?? '项目会话'}</h2>
-            {sessions.filter(item => item.projectId === projectId).map((item, index) => <NavLink title={stateText[item.state]} key={item.id} to={'/sessions/' + item.id} style={{ '--i': index } as React.CSSProperties}
-              className={({ isActive }) => `cv-rise flex h-8 items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] transition-colors ${isActive ? 'bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]' : 'text-[var(--ink-soft)] hover:bg-[var(--hover)]'}`}>
-              <span aria-label={stateText[item.state]} className={`cv-dot ${dotClass(item.state)}`} /><span className="truncate">{item.title}</span>
-              {item.pendingApprovals > 0 && <span className="ml-auto font-mono text-[11px] text-[var(--state-waiting)]">{item.pendingApprovals}</span>}
-            </NavLink>)}
+            {visible.filter(item => item.projectId === projectId && !item.pinned).map(row)}
           </section>)}
+          {archived.length > 0 && <details className="group/archived mb-3"><summary className="flex h-8 cursor-pointer list-none items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] text-[var(--ink-faint)] hover:bg-[var(--hover)] [&::-webkit-details-marker]:hidden"><Archive size={14} strokeWidth={1.75} />已归档 {archived.length}</summary><div className="mt-1">{archived.map(row)}</div></details>}
           <Link to="/history" className="flex h-8 items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]"><History {...icon} size={15} />搜索会话历史</Link>
           {legacy.length > 0 && <section className="mt-4"><h2 className="mb-1 px-2.5 text-xs text-[var(--ink-faint)]">3.4 历史 · 只读</h2>{legacy.slice(0, 6).map(task => <NavLink to={'/legacy-tasks?task=' + encodeURIComponent(task.id)} key={task.id} className="block h-8 truncate rounded-[9px] px-2.5 text-[13px] leading-8 text-[var(--ink-soft)] hover:bg-[var(--hover)]">{task.title}</NavLink>)}{legacy.length > 6 && <Link to="/legacy-tasks" className="block px-2.5 pt-1 text-xs text-[var(--ink-faint)] hover:text-[var(--ink)]">全部历史任务</Link>}</section>}
         </nav>}

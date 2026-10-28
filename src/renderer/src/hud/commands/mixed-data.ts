@@ -6,6 +6,7 @@
 import { ClipboardList, FileText, KeyRound, FolderOpen, PanelsTopLeft } from 'lucide-react'
 import { CredentialSortBy, SortDirection } from '@/types'
 import { fuzzyMatch } from '@/utils/fuzzy-search'
+import { matchScore } from '@/utils/window-match'
 import type { HudCommand, HudCommandSource } from '../types'
 import type { ClipboardFilter } from '@/types/clipboard'
 
@@ -15,7 +16,7 @@ export async function buildMixedDataCommands(query = '', filter?: ClipboardFilte
   const api = window.api
 
   const recentCredentials = { limit: 40, sortBy: CredentialSortBy.LAST_USED, sortDir: SortDirection.DESC }
-  const [credRes, clipRes, snipRes, recentRes, workRes] = await Promise.all([
+  const [credRes, clipRes, snipRes, recentRes, workRes, foreground] = await Promise.all([
     api.credential.list({
       ...recentCredentials,
       filter: query ? { keyword: query } : undefined,
@@ -23,18 +24,24 @@ export async function buildMixedDataCommands(query = '', filter?: ClipboardFilte
     api.clipboard.getHistory({ limit: query ? 40 : 20, filter: filter ?? (query ? { keyword: query, fuzzyPreview: true } : undefined), requestKey: 'hud' }),
     api.clipboard.getSnippets(),
     query ? api.credential.list(recentCredentials) : Promise.resolve(undefined),
-    api.workbench?.quickIndex?.() ?? Promise.resolve(undefined)
+    api.workbench?.quickIndex?.() ?? Promise.resolve(undefined),
+    api.hud?.foreground?.().catch(() => undefined) ?? Promise.resolve(undefined)
   ])
+  const front = foreground?.success && foreground.data ? foreground.data : { title: '', process: '' }
   for (const result of [credRes, clipRes, snipRes, recentRes]) {
     if (result && !result.success) throw new Error(result.error || '搜索失败，请重试')
   }
 
   if (workRes?.success && workRes.data) {
-    for (const resource of workRes.data.resources.filter(resource => resource.state !== 'revoked')) {
+    // 与前台窗口匹配的账号排最前（例如浏览器停在 GitHub 登录页时，GitHub 账号在第一位）。
+    const ranked = workRes.data.resources.filter(resource => resource.state !== 'revoked').map(resource => ({ resource, score: matchScore(front, resource) })).sort((a, b) => b.score - a.score)
+    for (const { resource, score } of ranked) {
       const searchable = [resource.name, resource.environment, resource.purpose, resource.endpoint, ...resource.aliases ?? []].join(' ')
       if (query && !fuzzyMatch(query, searchable)) continue
       const actions: HudCommand[] = []
       const run = async (request: Promise<{ success: boolean; error?: string }>): Promise<void> => { const result = await request; if (!result.success) throw new Error(result.error || '资源操作未完成') }
+      const typable = resource.fields.some(field => field.role === 'username') && resource.fields.some(field => field.role === 'password')
+      if (typable) actions.push({ id: `autotype:${resource.id}`, title: '自动输入', subtitle: '用户名 → Tab → 密码，不提交；验证码按 Alt+Shift+V', category: 'action', Icon: KeyRound, perform: () => run(api.workbench.autoType(resource.id)) })
       if (resource.fields.some(field => ['username', 'password', 'totp_seed'].includes(field.role ?? ''))) actions.push({ id: `sequence:${resource.id}`, title: '依次粘贴', category: 'action', perform: () => run(api.workbench.sequence(resource.id)) })
       for (const field of resource.fields) {
         actions.push({ id: `resource:${resource.id}:${field.name}`, title: `复制 ${field.role === 'totp_seed' ? '验证码' : field.name}`, subtitle: '只复制到系统剪贴板', category: 'action', Icon: KeyRound,
@@ -45,7 +52,8 @@ export async function buildMixedDataCommands(query = '', filter?: ClipboardFilte
       }
       if (resource.loginUrl || resource.endpoint) actions.push({ id: `open:${resource.id}`, title: '打开登录页', category: 'action', perform: () => run(api.workbench.openResource(resource.id)) })
       if (resource.kind === 'account' && resource.endpoint) actions.push({ id: `login:${resource.id}`, title: '辅助登录', category: 'action', perform: () => run(api.workbench.login(resource.id)) })
-      cmds.push({ id: `resource:${resource.id}`, title: resource.name, subtitle: `资源 · ${resource.environment} · → 取用`, category: 'credential', Icon: KeyRound, keywords: [query, searchable], actions, perform: () => {} })
+      cmds.push({ id: `resource:${resource.id}`, title: resource.name, subtitle: `${score ? '匹配当前窗口 · ' : ''}资源 · ${resource.environment} · ${typable ? '回车自动输入' : '→ 取用'}`, category: 'credential', Icon: KeyRound, keywords: [query, searchable], actions,
+        perform: typable ? () => run(api.workbench.autoType(resource.id)) : () => {} })
     }
     for (const project of workRes.data.projects.filter(project => !query || fuzzyMatch(query, project.name)).slice(0, 15)) cmds.push({ id: `project:${project.id}`, title: project.name, subtitle: `项目 · ${project.environment}`, category: 'navigate', Icon: FolderOpen,
       keywords: [query, project.name, '项目'], perform: async () => { await api.hud.navigate(`/workbench?project=${encodeURIComponent(project.id)}`) } })

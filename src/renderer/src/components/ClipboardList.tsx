@@ -35,24 +35,35 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN')
 }
 
+/** 缩略图缓存：最近 300 张，滚动列表不反复解密。 */
+const thumbCache = new Map<string, string>()
+function rememberThumb(id: string, src: string): void {
+  thumbCache.delete(id); thumbCache.set(id, src)
+  if (thumbCache.size > 300) thumbCache.delete(thumbCache.keys().next().value!)
+}
+
 export function ClipThumb({
   id,
-  imageData
+  imageData,
+  variant = 'card',
+  className = ''
 }: {
   id: string
   imageData?: string
+  /** row：列表行里的 40px 方图；tile：画廊卡片；card：旧版卡片 */
+  variant?: 'row' | 'tile' | 'card'
+  className?: string
 }): JSX.Element | null {
-  const [thumbnail, setThumbnail] = useState<{ id: string; src: string } | null>(null)
-  const src = imageData ?? (thumbnail?.id === id ? thumbnail.src : undefined)
+  const [thumbnail, setThumbnail] = useState<{ id: string; src: string } | null>(() => thumbCache.has(id) ? { id, src: thumbCache.get(id)! } : null)
+  const src = imageData ?? (thumbnail?.id === id ? thumbnail.src : thumbCache.get(id))
   useEffect(() => {
-    if (imageData) {
+    if (imageData || thumbCache.has(id)) {
       return
     }
     let cancelled = false
-    void window.api.clipboard
-      .getThumbnail?.(id)
+    void Promise.resolve(window.api?.clipboard?.getThumbnail?.(id))
       .then((res) => {
-        if (!cancelled && res.success && res.data) setThumbnail({ id, src: res.data })
+        if (res?.success && res.data) { rememberThumb(id, res.data); if (!cancelled) setThumbnail({ id, src: res.data }) }
       })
       .catch(() => {
         /* ignore */
@@ -61,7 +72,9 @@ export function ClipThumb({
       cancelled = true
     }
   }, [id, imageData])
-  if (!src) return null
+  if (!src) return variant === 'card' ? null : <span aria-hidden className={`block animate-pulse bg-[var(--surface-2)] ${variant === 'row' ? 'h-full w-full' : 'aspect-[4/3] w-full'} ${className}`} />
+  if (variant === 'row') return <img src={src} alt="" draggable={false} className={`h-full w-full object-cover ${className}`} />
+  if (variant === 'tile') return <img src={src} alt="" draggable={false} className={`aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] ${className}`} />
   return (
     <img
       src={src}
@@ -69,6 +82,26 @@ export function ClipThumb({
       className="mb-2 max-h-28 max-w-full border-2 border-[var(--line)]"
     />
   )
+}
+
+/** 「图片」分类的网格画廊：单击查看，双击复制，悬停显示来源与时间。 */
+export function ClipboardGallery({ items, focusedId, onOpen, onCopy, selectedIds, onToggleSelect }: {
+  items: ClipboardItem[]; focusedId?: string; onOpen: (item: ClipboardItem) => void; onCopy: (item: ClipboardItem) => void
+  selectedIds?: Set<string>; onToggleSelect?: (id: string) => void
+}): JSX.Element {
+  return <div aria-label="图片画廊" className="grid gap-2.5 px-2 pt-1 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">{items.map((item, index) => {
+    const active = focusedId === item.id, picked = selectedIds?.has(item.id) ?? false
+    return <div key={item.id} style={{ '--i': Math.min(index, 16) } as React.CSSProperties} className={`cv-rise group relative overflow-hidden rounded-[12px] bg-[var(--surface-2)] transition-shadow ${active ? 'shadow-[0_0_0_2px_var(--blue)]' : picked ? 'shadow-[0_0_0_2px_var(--ink-soft)]' : 'shadow-[inset_0_0_0_1px_var(--line)] hover:shadow-[0_6px_20px_-10px_rgba(24,24,27,.35),inset_0_0_0_1px_var(--line)]'}`}>
+      <button type="button" className="block w-full text-left" aria-label={`图片 ${item.ocrText ? item.ocrText.slice(0, 30) : ''}`} onClick={() => onOpen(item)} onDoubleClick={() => onCopy(item)}>
+        <ClipThumb id={item.id} imageData={item.imageData} variant="tile" />
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2 pt-6 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="truncate">{item.sourceApp || '未知来源'}</span><span className="shrink-0 font-mono">{formatTime(item.lastCopiedAt || item.createdAt)}</span>
+        </span>
+        {item.ocrState === 'done' && <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-[6px] bg-black/55 px-1.5 py-0.5 text-[10.5px] text-white">有文字</span>}
+      </button>
+      {onToggleSelect && <input type="checkbox" aria-label="选择图片" checked={picked} onChange={() => onToggleSelect(item.id)} className={`absolute left-2 top-2 h-4 w-4 accent-[var(--blue)] transition-opacity ${picked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />}
+    </div>
+  })}</div>
 }
 
 function TypeIcon({ type }: { type: string }): JSX.Element {
@@ -134,8 +167,9 @@ export default function ClipboardList({
     return <div key={item.id} style={{ '--i': Math.min(index, 12) } as React.CSSProperties} className={`cv-rise group flex items-center gap-2 rounded-[10px] pl-2 pr-3 transition-colors ${active ? 'bg-[var(--primary-soft)]' : picked ? 'bg-[var(--active)]' : 'hover:bg-[var(--hover)]'}`}>
       <input className="h-3.5 w-3.5 shrink-0 accent-[var(--blue)] opacity-40 transition-opacity checked:opacity-100 group-hover:opacity-100" type="checkbox" aria-label={`选择记录 ${index + 1}`} checked={picked} onChange={() => onToggleSelect?.(item.id)} />
       <button className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left" onClick={() => onOpen(item)} onDoubleClick={() => onCopy(item)}>
-        <span className="cv-icon-slot">{item.isPinned ? <Pin size={14} strokeWidth={1.75} /> : <TypeIcon type={item.category === 'code' ? 'html' : item.type} />}</span>
-        <span className="min-w-0 flex-1"><span className={`block truncate text-[13.5px] ${mono ? 'font-mono text-[13px]' : ''}`}>{['secret', 'credential'].includes(item.category || '') ? '敏感资料 · ••••••' : item.aiMeta?.title || item.preview || item.content || '[图片]'}</span>
+        {item.type === 'image' ? <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[9px] bg-[var(--surface-2)] shadow-[inset_0_0_0_1px_var(--line)]"><ClipThumb id={item.id} imageData={item.imageData} variant="row" />{item.isPinned && <span className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-[5px] bg-black/55 text-white"><Pin size={10} strokeWidth={2} /></span>}</span>
+          : <span className="cv-icon-slot">{item.isPinned ? <Pin size={14} strokeWidth={1.75} /> : <TypeIcon type={item.category === 'code' ? 'html' : item.type} />}</span>}
+        <span className="min-w-0 flex-1"><span className={`block truncate text-[13.5px] ${mono ? 'font-mono text-[13px]' : ''}`}>{['secret', 'credential'].includes(item.category || '') ? '敏感资料 · ••••••' : item.type === 'image' ? (item.aiMeta?.title || (item.ocrText ? item.ocrText.replace(/s+/g, ' ').slice(0, 80) : '图片')) : item.aiMeta?.title || item.preview || item.content || '[图片]'}</span>
           <span className="mt-0.5 block truncate text-xs text-[var(--ink-faint)]">{item.sourceApp || '未知来源'}{(item.copyCount || 1) > 1 ? ` · 复制 ${item.copyCount} 次` : ''}{item.isPinned ? ' · 置顶' : ''}</span></span>
         <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-[var(--ink-faint)]">{formatTime(item.lastCopiedAt || item.createdAt)}<span className={`cv-kbd transition-opacity ${index < 9 ? (active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100') : 'invisible'}`}>{index < 9 ? index + 1 : '·'}</span></span>
       </button></div>

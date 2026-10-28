@@ -25,6 +25,7 @@ const SessionPage = lazy(() => import('./pages/SessionPage'))
 const MorePage = lazy(() => import('./pages/MorePage'))
 const InboxPage = lazy(() => import('./pages/InboxPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const JarvisSettingsPage = lazy(() => import('./pages/JarvisSettingsPage'))
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'))
 const CredentialPage = lazy(() => import('./pages/CredentialPage'))
 const ClipboardPage = lazy(() => import('./pages/ClipboardPage'))
@@ -351,6 +352,7 @@ function App(): JSX.Element {
               <Route path="resources/:id" element={<ResourcesPage />} />
               <Route path="more" element={<MorePage />} />
               <Route path="more/projects" element={<ProjectsPage />} />
+              <Route path="more/jarvis" element={<JarvisSettingsPage />} />
               <Route path="more/totp" element={<TotpPage />} />
               <Route path="more/snippets" element={<SnippetsPage />} />
               <Route path="more/credentials" element={<CredentialPage />} />

@@ -110,7 +110,13 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       clearTimeout(timer)
       timer = setTimeout(() => void refresh(), 60)
     })
+    // OCR 在后台陆续完成：合并成一次较慢的刷新，避免批量补算时频繁重查。
+    const offOcr = window.api.clipboard.onOcrDone?.(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => void refresh(), 1500)
+    })
     return () => {
+      offOcr?.()
       clearTimeout(timer)
       // 请求序号不是 DOM ref；卸载时必须使最新请求失效。
       // eslint-disable-next-line react-hooks/exhaustive-deps

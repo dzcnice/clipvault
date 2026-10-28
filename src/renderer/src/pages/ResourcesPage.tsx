@@ -24,6 +24,8 @@ function CopyButton({ label, disabled, onCopy }: { label: string; disabled: bool
 }
 
 export default function ResourcesPage(): JSX.Element {
+  const [legacyCount, setLegacyCount] = useState(0)
+  useEffect(() => { void window.api.workbench.legacyCredentials?.().then(result => { if (result.success) setLegacyCount(result.data ?? 0) }).catch(() => {}) }, [])
   const { id } = useParams(), navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const work = useWorkbench(), confirm = useConfirm()
@@ -43,7 +45,7 @@ export default function ResourcesPage(): JSX.Element {
   const issues = (resourceId: string): string[] => health.find(item => item.resourceId === resourceId)?.issues.map(issue => issue.kind === 'rotate' ? '待轮换' : issue.kind === 'weak_password' ? '弱密码' : '重复密码') ?? []
   const copyField = (resource: WorkResource, field: string): Promise<boolean> => work.act(() => unwrap(window.api.workbench.copyField(resource.id, field, resource.version)), `${field} 已复制`).then(result => result !== undefined)
 
-  return <WorkbenchFrame title="账号与密钥" description="密钥只进不出，模型只看得到名字" flush {...work}
+  return <WorkbenchFrame title="资源库" description="账号与密钥 · 密钥只进不出，模型只看得到名字" flush {...work}
     actions={<button className="cv-btn cv-btn-primary !h-8" onClick={() => { setCreating(true); setEditing(undefined); navigate('/resources') }}><Plus {...icon} size={14} />新建资源</button>}>
     <div className="flex min-h-0 w-full">
       <aside className="flex w-[340px] shrink-0 flex-col border-r border-[var(--line)]" aria-label="资源列表">
@@ -85,6 +87,11 @@ export default function ResourcesPage(): JSX.Element {
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-[var(--primary)] text-[var(--primary-foreground)]"><KeyRound size={18} strokeWidth={1.75} /></span>
                 <span className="min-w-0 flex-1"><span className="block text-[15px] font-medium">{resources.length ? '把新的账号和密钥交给这里' : '把常用账号和密钥交给这里'}</span><span className="mt-0.5 block text-[13px] text-[var(--ink-faint)]">粘贴一段资料并说一句用途，本地整理字段，检查后加密保存。之后每个字段都能单独复制、依次粘贴。</span></span>
                 <Plus {...icon} className="text-[var(--ink-faint)] transition-transform duration-300 group-hover:rotate-90" /></button>
+              {legacyCount > 0 && <section className="cv-rise flex items-center gap-4 rounded-[16px] bg-[var(--primary-soft)] p-4" style={{ '--i': 1 } as React.CSSProperties}>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[var(--surface)] text-[var(--blue)] shadow-[var(--shadow-sm)]"><KeyRound size={17} strokeWidth={1.75} /></span>
+                <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">还有 {legacyCount} 条原有凭证没并入资源</span><span className="mt-0.5 block text-[12.5px] text-[var(--ink-soft)]">并入后可以依次粘贴登录、在会话里 @ 引用，TOTP 一起带过来；原记录保留只读。</span></span>
+                <button className="cv-btn cv-btn-primary shrink-0" disabled={work.busy} onClick={() => void work.act(async () => { const result = await unwrap(window.api.workbench.importAllCredentials()); setLegacyCount(result.failed); return result }, '原有凭证已并入资源')}>一键并入</button>
+              </section>}
               {work.data && <section className="cv-rise" style={{ '--i': 1 } as React.CSSProperties}><ModelSettings onSaved={() => void work.refresh()} /></section>}
               <details className="cv-rise group rounded-[14px] shadow-[inset_0_0_0_1px_var(--line)]" style={{ '--i': 2 } as React.CSSProperties}><summary className="flex cursor-pointer list-none items-center px-4 py-3 text-[13.5px] [&::-webkit-details-marker]:hidden">从现有凭证导入副本<span className="ml-auto text-[var(--ink-faint)] transition-transform group-open:rotate-90">›</span></summary>
                 <div className="space-y-2 border-t border-[var(--line)] p-4"><p className="text-xs text-[var(--ink-faint)]">旧凭证和 TOTP 关联会保留。导入后，两个版本分别管理。</p><button className="cv-btn cv-btn-secondary" disabled={work.busy} onClick={() => void work.act(async () => { const result = await unwrap(window.api.credential.list({ limit: 5000 })); setLegacy(result.items) })}>读取现有凭证</button>

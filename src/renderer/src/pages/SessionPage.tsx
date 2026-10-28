@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowUp, AtSign, Check, ChevronRight, ClipboardList, FilePen, FolderGit2, ListChecks, Paperclip, PanelRight, Plus, Square, X, Lightbulb, ShieldCheck, AlarmClock } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Check, ChevronRight, FilePen, PanelRight, Plus, Square, X, Lightbulb, ShieldCheck, AlarmClock, ScanText } from 'lucide-react'
 import type { HostSessionSummary, QuestionAnswer, SessionPermission, UiEvent, UiQuestion, Mention, SessionContext } from '@/types/session'
 import type { WorkProject, ContextItem, TaskTemplate } from '@/types/workbench'
+import { Composer } from '../components/SessionComposer'
+import SessionWelcome, { QUICK_PROJECT_ID } from '../components/SessionWelcome'
 import { unwrap } from '../hooks/useWorkbench'
 import ResourceIntake from '../components/ResourceIntakeReview'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog'
@@ -11,22 +13,20 @@ import SessionContextPanel, { FileDifference } from '../components/SessionContex
 const status: Record<HostSessionSummary['state'], string> = { idle: '就绪', starting: '正在启动', running: '进行中', waiting_user: '等你确认', stopping: '正在停止', stopped: '已停止', failed: '未完成', queued: '排队中' }
 const ongoing = new Set(['starting', 'running', 'waiting_user', 'stopping', 'queued'])
 const dot = (state?: HostSessionSummary['state']): string => !state ? 'cv-dot-idle' : state === 'failed' ? 'cv-dot-failed' : state === 'waiting_user' ? 'cv-dot-waiting' : ['running', 'starting', 'queued', 'stopping'].includes(state) ? 'cv-dot-running' : state === 'idle' ? 'cv-dot-done' : 'cv-dot-idle'
-const permissions: Array<{ value: SessionPermission; label: string; hint: string }> = [
-  { value: 'confirm', label: '逐次确认', hint: '写入、联网和命令都先问你' },
-  { value: 'readonly', label: '只读', hint: '只看不改' },
-  { value: 'project_auto', label: '项目内自动', hint: '自动改项目文件，其余仍确认' }
-]
 const icon = { size: 15, strokeWidth: 1.75 }
+const remembered = <T extends string>(key: string, allowed: readonly T[], fallback: T): T => { try { const value = localStorage.getItem(key) as T | null; return value && allowed.includes(value) ? value : fallback } catch { return fallback } }
+type Incoming = { clipboardIds?: string[]; resourceId?: string; projectId?: string; text?: string; mentions?: Mention[]; attachments?: ContextItem[]; autoSend?: boolean }
 
 export default function SessionPage(): JSX.Element {
   const { id } = useParams(), navigate = useNavigate(), location = useLocation()
-  const incoming = useMemo(() => { const query = new URLSearchParams(location.search); return (location.state ?? (query.has('clipboard') ? { clipboardIds: [query.get('clipboard')!] } : query.has('resource') ? { resourceId: query.get('resource')! } : null)) as { clipboardIds?: string[]; resourceId?: string; projectId?: string; text?: string } | null }, [location.state, location.search])
-  const applied = useRef(''), feed = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null)
+  const incoming = useMemo(() => { const query = new URLSearchParams(location.search); return (location.state ?? (query.has('clipboard') ? { clipboardIds: [query.get('clipboard')!] } : query.has('resource') ? { resourceId: query.get('resource')! } : null)) as Incoming | null }, [location.state, location.search])
+  const applied = useRef(''), autoSend = useRef(''), feed = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null)
+  const [modelReady, setModelReady] = useState<boolean | null>(null)
   const [context, setContext] = useState<SessionContext>(), [titleEdit, setTitleEdit] = useState<string>(), [showContext, setShowContext] = useState(false)
   const [recent, setRecent] = useState<Mention[]>([]), [templates, setTemplates] = useState<TaskTemplate[]>([])
   const [sessions, setSessions] = useState<HostSessionSummary[]>([]), [events, setEvents] = useState<UiEvent[]>([])
-  const [projects, setProjects] = useState<WorkProject[]>([]), [projectId, setProjectId] = useState('')
-  const [permission, setPermission] = useState<SessionPermission>('confirm')
+  const [projects, setProjects] = useState<WorkProject[]>([]), [projectId, setProjectId] = useState(() => { try { return localStorage.getItem('cv.session.project') || QUICK_PROJECT_ID } catch { return QUICK_PROJECT_ID } })
+  const [permission, setPermission] = useState<SessionPermission>(() => remembered<SessionPermission>('cv.session.permission', ['confirm', 'readonly', 'project_auto'], 'confirm'))
   const [text, setText] = useState(''), [error, setError] = useState(''), [loading, setLoading] = useState(true), [sending, setSending] = useState(false)
   const [intake, setIntake] = useState(false), [mentions, setMentions] = useState<Mention[]>([]), [candidates, setCandidates] = useState<Mention[]>([]), [mentionKind, setMentionKind] = useState<Mention['kind']>('clipboard')
   const [attachments, setAttachments] = useState<ContextItem[]>([])
@@ -51,14 +51,19 @@ export default function SessionPage(): JSX.Element {
     load(); const off = window.api.workbench.onChanged?.(load)
     return () => { off?.() }
   }, [])
-  useEffect(() => { void window.sessionAPI.mentionCandidates?.({ kind: 'clipboard', query: '' }).then(items => setRecent(items.slice(0, 3))).catch(() => {}); void window.api.workbench.templates?.().then(result => { if (result.success && result.data) setTemplates(result.data) }).catch(() => {}) }, [])
+  useEffect(() => {
+    void window.sessionAPI.mentionCandidates?.({ kind: 'clipboard', query: '' }).then(items => setRecent(items.slice(0, 3))).catch(() => {})
+    void window.api.workbench.templates?.().then(result => { if (result.success && result.data) setTemplates(result.data) }).catch(() => {})
+    void window.api.workbench.modelService?.().then(result => setModelReady(result.success ? !!result.data?.configured : null)).catch(() => {})
+  }, [])
   useEffect(() => {
     if (applied.current === location.key) return
-    applied.current = location.key; setError(''); setTitleEdit(undefined); setAttachments([])
+    applied.current = location.key; setError(''); setTitleEdit(undefined); setAttachments(incoming?.attachments ?? [])
     setText(incoming?.text || (incoming?.clipboardIds?.length ? '请处理这些剪贴板资料' : incoming?.resourceId ? '请使用这份资源帮我处理工作' : ''))
-    setMentions([...(incoming?.clipboardIds ?? []).map(value => ({ kind: 'clipboard' as const, id: value, label: '剪贴板资料' })), ...(incoming?.resourceId ? [{ kind: 'resource' as const, id: incoming.resourceId, label: '资源引用' }] : [])])
+    setMentions(incoming?.mentions ?? [...(incoming?.clipboardIds ?? []).map(value => ({ kind: 'clipboard' as const, id: value, label: '剪贴板资料' })), ...(incoming?.resourceId ? [{ kind: 'resource' as const, id: incoming.resourceId, label: '资源引用' }] : [])])
     if (incoming?.projectId) setProjectId(incoming.projectId)
-    if (id) void window.sessionAPI.prewarm(id).catch(() => {})
+    autoSend.current = id && incoming?.autoSend ? location.key : ''
+    if (id && !incoming?.autoSend) void window.sessionAPI.prewarm(id).catch(() => {})
   }, [id, location.key, incoming])
   useEffect(() => {
     const query = text.match(/@([^@\n]*)$/)?.[1]
@@ -70,11 +75,35 @@ export default function SessionPage(): JSX.Element {
   useEffect(() => { const box = feed.current; if (!box || box.scrollHeight - box.scrollTop - box.clientHeight >= 240) return; if (box.scrollTo) box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); else box.scrollTop = box.scrollHeight }, [events.length])
   useEffect(() => { const box = input.current; if (box) { box.style.height = 'auto'; box.style.height = Math.min(200, box.scrollHeight) + 'px' } }, [text])
 
+  /** 粘贴或拖入的截图：存为剪贴板图片（重复图片合并），作为图片引用带进这条消息。 */
+  const pasteImages = (files: File[]): void => void act(async () => {
+    for (const file of files.slice(0, 4)) {
+      if (file.size > 20 * 1024 * 1024) throw new Error('图片超过 20 MB，请先压缩')
+      const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('图片读取失败')); reader.readAsDataURL(file) })
+      const item = await unwrap(window.api.clipboard.savePastedImage(dataUrl))
+      setMentions(old => old.some(value => value.id === item.id) ? old : [...old, { kind: 'clipboard', id: item.id, label: '截图 / 图片' }])
+    }
+    setText(value => value || '这张图里有什么？'); input.current?.focus()
+  })
+  /** 截图问 AI：调起系统框选截图，截到后作为图片引用放进输入框。 */
+  const capture = (): void => void act(async () => {
+    const id = await unwrap(window.api.clipboard.capture())
+    if (!id) return
+    setMentions(old => old.some(value => value.id === id) ? old : [...old, { kind: 'clipboard', id, label: '截图 / 图片' }])
+    setText(value => value || '这张截图里有什么？'); input.current?.focus()
+  })
   const addMention = (item: Mention): void => { setMentions(old => old.some(value => value.kind === item.kind && value.id === item.id) ? old : [...old, item]); setText(value => value.replace(/@[^@\n]*$/, '')); setCandidates([]) }
   const act = async (action: () => Promise<unknown>): Promise<void> => { setError(''); try { await action(); await refresh() } catch (error) { setError(error instanceof Error ? error.message : '操作失败') } }
+  /** 欢迎页回车：建会话并直接发出第一句；项目与权限记住到下次。 */
   async function create(): Promise<void> {
-    const session = await window.sessionAPI.create({ projectId: projectId || projects[0]?.id || '', permission })
-    navigate(`/sessions/${session.id}`, { state: { ...incoming, text, clipboardIds: mentions.filter(item => item.kind === 'clipboard').map(item => item.id) } })
+    if (!text.trim() || sending) return
+    const chosen = projects.some(item => item.id === projectId) ? projectId : projects[0]?.id ?? QUICK_PROJECT_ID
+    try { localStorage.setItem('cv.session.project', chosen); localStorage.setItem('cv.session.permission', permission) } catch { /* 隐私模式下不记忆 */ }
+    setSending(true)
+    try {
+      const session = await window.sessionAPI.create({ projectId: chosen, permission })
+      navigate(`/sessions/${session.id}`, { state: { text, mentions, attachments, autoSend: true } satisfies Incoming })
+    } finally { setSending(false) }
   }
   async function send(allowPossibleSecret = false): Promise<void> {
     if (!id || !text.trim() || sending) return
@@ -83,6 +112,12 @@ export default function SessionPage(): JSX.Element {
     catch (error) { if (error instanceof Error && error.message.startsWith('POSSIBLE_SECRET')) { setPossibleSecret(true); return } if (error instanceof Error && /检测到账号或密钥/.test(error.message)) setIntake(true); throw error }
     finally { setSending(false) }
   }
+  // 欢迎页带来的第一句：进入会话后自动发出（审批卡片会出现在会话里）。
+  useEffect(() => {
+    if (!id || !autoSend.current || autoSend.current !== location.key || !text.trim() || sending) return
+    autoSend.current = ''
+    void act(send)
+  })
   const visible = events.filter((event, index) => {
     if (event.type === 'question') return !events.slice(index + 1).some(later => later.type === 'question' && later.question.id === event.question.id)
     if (event.type === 'approval') return !events.slice(index + 1).some(later => later.type === 'approval' && later.approval.id === event.approval.id)
@@ -117,7 +152,8 @@ export default function SessionPage(): JSX.Element {
     {error && <div role="alert" className="mx-auto mt-3 flex w-full max-w-[720px] items-center gap-3 rounded-[10px] bg-[var(--bad-soft)] px-4 py-2.5 text-[13px] text-[var(--destructive)] cv-pop">{error}<button className="ml-auto font-medium underline-offset-2 hover:underline" onClick={() => void act(refresh)}>重试</button></div>}
 
     <div className="flex min-h-0 flex-1">
-      {!id ? <Welcome {...{ loading, projects, projectId, setProjectId, permission, setPermission, recent, mentions, addMention, setText, create: () => void act(create) }} /> :
+      {!id ? <SessionWelcome {...{ loading, projects, projectId, setProjectId, permission, setPermission, recent, mentions, setMentions, addMention, text, setText, input, attachments, setAttachments, candidates, mentionKind, setMentionKind, templates, sending, modelReady }}
+        onSend={() => void act(create)} onAttach={() => void act(async () => setAttachments(await unwrap(window.api.workbench.chooseAttachments())))} onPasteImage={pasteImages} onCapture={capture} /> :
         <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div ref={feed} className="min-h-0 flex-1 overflow-y-auto" aria-label="会话消息" aria-live="polite">
             <div className="mx-auto max-w-[720px] px-8 pb-56 pt-9">
@@ -127,91 +163,11 @@ export default function SessionPage(): JSX.Element {
             </div>
           </div>
           <Composer {...{ text, setText, input, busy, sending, mentions, setMentions, attachments, setAttachments, candidates, addMention, mentionKind, setMentionKind, templates, permission: current?.permission ?? 'confirm' }}
-            onSend={() => void act(send)} onAttach={() => void act(async () => setAttachments(await unwrap(window.api.workbench.chooseAttachments())))} />
+            onSend={() => void act(send)} onAttach={() => void act(async () => setAttachments(await unwrap(window.api.workbench.chooseAttachments())))} onPasteImage={pasteImages}
+            extra={<button type="button" className="cv-btn cv-btn-ghost !h-[30px] !px-2.5" title="截图问 AI（Alt+Shift+S）" onClick={capture}><ScanText size={14} strokeWidth={1.75} />截图</button>} />
         </section>}
       {id && showContext && <SessionContextPanel context={context} onClose={() => setShowContext(false)} onDeleteSchedule={scheduleId => void act(() => window.sessionAPI.deleteSchedule({ sessionId: id, id: scheduleId }))} />}
     </div>
-  </div>
-}
-
-function Welcome({ loading, projects, projectId, setProjectId, permission, setPermission, recent, mentions, addMention, setText, create }: {
-  loading: boolean; projects: WorkProject[]; projectId: string; setProjectId: (value: string) => void; permission: SessionPermission; setPermission: (value: SessionPermission) => void
-  recent: Mention[]; mentions: Mention[]; addMention: (item: Mention) => void; setText: (value: string) => void; create: () => void
-}): JSX.Element {
-  const selected = projectId || projects[0]?.id
-  return <section className="min-w-0 flex-1 overflow-y-auto">
-    <div className="mx-auto max-w-[640px] px-8 pb-16 pt-[12vh]">
-      {loading && <p role="status" className="cv-shimmer mb-4 text-[13px]">正在读取会话…</p>}
-      <h2 className="cv-rise text-[26px] font-semibold tracking-[-.025em]">这次做什么？</h2>
-      <p className="cv-rise mt-1.5 text-[14px] text-[var(--ink-faint)]" style={{ '--i': 1 } as React.CSSProperties}>选一个项目开始。剪贴板和账号随时用 @ 引用，审批与追问都在对话里完成。</p>
-      {!projects.length ? <div className="cv-rise mt-8 flex items-center gap-3 rounded-[14px] p-4 shadow-[inset_0_0_0_1px_var(--line)]" style={{ '--i': 2 } as React.CSSProperties}><span className="cv-icon-slot"><FolderGit2 {...icon} /></span><p className="text-[13.5px]">先<Link className="font-medium text-[var(--blue)] hover:underline" to="/more/projects">添加项目</Link>，关联具体的代码目录。</p></div> : <>
-        <div className="cv-rise mt-8" style={{ '--i': 2 } as React.CSSProperties}>
-          <label className="mb-2 block text-xs text-[var(--ink-faint)]" htmlFor="welcome-project">项目</label>
-          <div className="flex flex-wrap gap-2">
-            {projects.length <= 6 ? projects.map(project => <button type="button" key={project.id} aria-pressed={selected === project.id} onClick={() => setProjectId(project.id)}
-              className={`flex h-9 items-center gap-2 rounded-[10px] px-3 text-[13.5px] transition-all duration-200 ${selected === project.id ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'text-[var(--ink-soft)] shadow-[inset_0_0_0_1px_var(--border-strong)] hover:bg-[var(--hover)]'}`}><FolderGit2 {...icon} size={14} />{project.name}</button>)
-              : <select id="welcome-project" className="cv-input max-w-xs" value={selected} onChange={event => setProjectId(event.target.value)}>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
-          </div>
-        </div>
-        <div className="cv-rise mt-6" style={{ '--i': 3 } as React.CSSProperties}>
-          <span className="mb-2 block text-xs text-[var(--ink-faint)]">权限</span>
-          <div role="radiogroup" aria-label="权限" className="inline-flex rounded-[10px] bg-[var(--surface-2)] p-1 shadow-[inset_0_0_0_1px_var(--line)]">
-            {permissions.map(item => <button type="button" role="radio" aria-checked={permission === item.value} key={item.value} title={item.hint} onClick={() => setPermission(item.value)}
-              className={`h-7 rounded-[7px] px-3 text-[13px] transition-all duration-200 ${permission === item.value ? 'bg-[var(--surface)] font-medium text-[var(--ink)] shadow-[var(--shadow-sm),0_0_0_1px_var(--line)]' : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'}`}>{item.label}</button>)}
-          </div>
-          <p className="mt-2 text-xs text-[var(--ink-faint)]">{permissions.find(item => item.value === permission)?.hint}</p>
-        </div>
-        <button className="cv-rise cv-btn cv-btn-primary mt-8 !h-10 !px-5 text-[14px]" style={{ '--i': 4 } as React.CSSProperties} onClick={create}>开始会话<ArrowUp {...icon} className="rotate-90" /></button>
-      </>}
-      <section className="cv-rise mt-12" style={{ '--i': 5 } as React.CSSProperties}>
-        <h3 className="mb-3 flex items-center gap-2 text-xs text-[var(--ink-faint)]"><ClipboardList {...icon} size={13} />最近复制</h3>
-        {recent.length ? <div className="grid gap-2">{recent.map(item => <button key={item.id} onClick={() => { addMention(item); setText('请分析这段资料，给我可执行的处理建议') }}
-          className="group flex items-center gap-3 rounded-[12px] px-3.5 py-3 text-left shadow-[inset_0_0_0_1px_var(--line)] transition-all duration-200 hover:-translate-y-px hover:bg-[var(--surface-2)]">
-          <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{item.label || '剪贴板资料'}</span>
-          <span className="text-xs text-[var(--ink-faint)] opacity-0 transition-opacity group-hover:opacity-100">用于会话</span></button>)}</div>
-          : <p className="text-[13px] text-[var(--ink-faint)]">复制内容后，这里会出现最近资料。复制、搜索和粘贴始终在本机可用。</p>}
-        {mentions.length > 0 && <p className="mt-3 text-xs text-[var(--blue)]">已选择 {mentions.length} 份引用，将随新会话带入输入框。</p>}
-      </section>
-    </div>
-  </section>
-}
-
-function Composer({ text, setText, input, busy, sending, mentions, setMentions, attachments, setAttachments, candidates, addMention, mentionKind, setMentionKind, templates, permission, onSend, onAttach }: {
-  text: string; setText: React.Dispatch<React.SetStateAction<string>>; input: React.RefObject<HTMLTextAreaElement>; busy: boolean; sending: boolean
-  mentions: Mention[]; setMentions: React.Dispatch<React.SetStateAction<Mention[]>>; attachments: ContextItem[]; setAttachments: React.Dispatch<React.SetStateAction<ContextItem[]>>
-  candidates: Mention[]; addMention: (item: Mention) => void; mentionKind: Mention['kind']; setMentionKind: (kind: Mention['kind']) => void; templates: TaskTemplate[]; permission: SessionPermission
-  onSend: () => void; onAttach: () => void
-}): JSX.Element {
-  const mentioning = /@[^@\n]*$/.test(text), slash = text.startsWith('/')
-  const skills = templates.filter(item => item.name.includes(text.slice(1)))
-  return <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-[var(--surface)] via-40% to-[var(--surface)] px-8 pb-5 pt-10">
-    <form onSubmit={event => { event.preventDefault(); onSend() }} data-busy={busy}
-      className="cv-composer pointer-events-auto relative mx-auto max-w-[720px] rounded-[16px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border-strong),0_8px_28px_-10px_rgba(24,24,27,.22)]">
-      {(mentioning || (slash && skills.length > 0)) && <div className="cv-pop absolute bottom-[calc(100%+8px)] left-0 w-[420px] max-w-full rounded-[14px] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
-        {mentioning ? <>
-          <div role="tablist" aria-label="引用来源" className="flex gap-1 p-1">{(['clipboard', 'resource', 'file'] as const).map(kind => <button type="button" role="tab" aria-selected={mentionKind === kind} key={kind} onClick={() => setMentionKind(kind)} className={`h-7 rounded-[7px] px-2.5 text-xs transition-colors ${mentionKind === kind ? 'bg-[var(--active)] font-medium text-[var(--ink)]' : 'text-[var(--ink-soft)] hover:bg-[var(--hover)]'}`}>{kind === 'clipboard' ? '剪贴板' : kind === 'resource' ? '资源' : '项目文件'}</button>)}</div>
-          <div className="max-h-56 overflow-y-auto" aria-label="引用候选">{candidates.map((item, index) => <button type="button" className={`flex h-10 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13px] ${index === 0 ? 'bg-[var(--primary-soft)]' : 'hover:bg-[var(--hover)]'}`} key={item.id} onClick={() => addMention(item)}><span className="min-w-0 flex-1 truncate font-mono">{item.label}</span>{index === 0 && <kbd className="cv-kbd">↵</kbd>}</button>)}
-            {!candidates.length && <p className="px-2.5 py-3 text-xs text-[var(--ink-faint)]">暂无匹配资料</p>}</div>
-        </> : <div aria-label="技能" className="max-h-56 overflow-y-auto">{skills.map(item => <button type="button" key={item.id} className="flex h-10 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13px] hover:bg-[var(--hover)]" onClick={() => setText(item.prompt + (item.acceptance ? '\n验收要求：' + item.acceptance : ''))}><ListChecks {...icon} size={14} />{item.name}</button>)}</div>}
-      </div>}
-      {(mentions.length > 0 || attachments.length > 0) && <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-        {mentions.map(item => <span key={`${item.kind}:${item.id}`} className="cv-pop inline-flex h-7 items-center gap-1.5 rounded-[8px] bg-[var(--surface-2)] pl-2.5 pr-1 text-[12.5px] shadow-[inset_0_0_0_1px_var(--line)]">{item.kind === 'resource' ? <ShieldCheck {...icon} size={13} /> : <ClipboardList {...icon} size={13} />}{item.label}<button type="button" className="grid h-5 w-5 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--hover)] hover:text-[var(--ink)]" aria-label={`移除引用 ${item.label}`} onClick={() => setMentions(old => old.filter(value => value !== item))}><X size={12} /></button></span>)}
-        {attachments.map(item => <span key={item.id} className="cv-pop inline-flex h-7 items-center gap-1.5 rounded-[8px] bg-[var(--surface-2)] pl-2.5 pr-1 text-[12.5px] shadow-[inset_0_0_0_1px_var(--line)]"><Paperclip {...icon} size={13} />{item.title}<button type="button" className="grid h-5 w-5 place-items-center rounded-[5px] text-[var(--ink-faint)] hover:bg-[var(--hover)]" aria-label={`移除附件 ${item.title}`} onClick={() => setAttachments(old => old.filter(value => value.id !== item.id))}><X size={12} /></button></span>)}
-      </div>}
-      <label htmlFor="session-message" className="sr-only">消息</label>
-      <textarea ref={input} id="session-message" rows={1} maxLength={100000} placeholder={busy ? '助手正在工作，完成后可以继续说…' : '继续说，或输入 @ 引用剪贴板与资源，/ 使用技能'} value={text}
-        className="block max-h-[200px] min-h-[52px] w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] leading-relaxed text-[var(--ink)] outline-none placeholder:text-[var(--ink-faint)]"
-        onChange={event => setText(event.target.value)}
-        onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mentioning && candidates[0]) addMention(candidates[0]); else if (!busy && !sending) onSend() } }} />
-      <div className="flex items-center gap-1 px-2 pb-2 pt-1">
-        <button type="button" className="cv-btn cv-btn-ghost !h-[30px] !px-2.5" onClick={() => { setText(value => value + (value && !value.endsWith(' ') ? ' @' : '@')); input.current?.focus() }}><AtSign {...icon} size={14} />引用</button>
-        <button type="button" className="cv-btn cv-btn-ghost !h-[30px] !px-2.5" onClick={onAttach}><Paperclip {...icon} size={14} />附件</button>
-        <span className="flex-1" />
-        <span className="mr-1 text-xs text-[var(--ink-faint)]">{permissions.find(item => item.value === permission)?.label}</span>
-        <button aria-label={sending ? '等待会话接收' : '发送'} title="发送 Enter" disabled={sending || busy || !text.trim()}
-          className="grid h-8 w-8 place-items-center rounded-[9px] bg-[var(--primary)] text-[var(--primary-foreground)] transition-transform duration-200 ease-[cubic-bezier(.34,1.56,.64,1)] hover:scale-105 active:scale-95 disabled:hover:scale-100"><ArrowUp size={16} strokeWidth={2.2} /></button>
-      </div>
-    </form>
   </div>
 }
 

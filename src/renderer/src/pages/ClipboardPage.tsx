@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ClipboardList, RefreshCw, Trash2 } from 'lucide-react'
 import { useClipboard } from '../hooks/useClipboard'
-import ClipboardListView, { type ImageCopyMode } from '../components/ClipboardList'
+import ClipboardListView, { ClipboardGallery, type ImageCopyMode } from '../components/ClipboardList'
 import ClipboardDetail from '../components/ClipboardDetail'
 import ClipboardOrganize from '../components/ClipboardOrganize'
 import type { RecallResult, InboxItem } from '@/types/inbox'
@@ -431,7 +431,7 @@ export default function ClipboardPage(): JSX.Element {
               </div>
             ) : (
               <>
-                <ClipboardListView
+                {typeFilter === 'image' || category === 'image' ? <ClipboardGallery items={displayItems} focusedId={focused?.id} onOpen={item => setFocusedId(item.id)} onCopy={item => void handleCopy(item)} selectedIds={selected} onToggleSelect={toggleSelect} /> : <ClipboardListView
                   items={displayItems}
                   focusedId={focused?.id}
                   onOpen={item => setFocusedId(item.id)}
@@ -443,7 +443,7 @@ export default function ClipboardPage(): JSX.Element {
                   selectedIds={selected}
                   onToggleSelect={toggleSelect}
                   duplicateOf={duplicateOf}
-                />
+                />}
                 {total > items.length ? (
                   <div className="flex justify-center py-3">
                     <button type="button" className="cv-btn cv-btn-secondary text-xs" onClick={() => setLimit((n) => n + 80)}>加载更多（{items.length}/{total}）</button>

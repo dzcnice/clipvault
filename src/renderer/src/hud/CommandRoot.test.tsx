@@ -15,6 +15,7 @@ beforeEach(() => {
     hide: fixtures.hide,
     navigate: fixtures.navigate,
     onShown: (callback: () => void) => { fixtures.shown = callback; return () => {} },
+    mode: vi.fn().mockResolvedValue({ success: true }), onJarvisOpen: () => () => {},
     onHidden: () => () => {}
   } } })
   vi.stubGlobal('ResizeObserver', class { observe(): void {} unobserve(): void {} disconnect(): void {} })
@@ -22,13 +23,21 @@ beforeEach(() => {
 })
 
 describe('M1 HUD search and copy interaction', () => {
-  it('opens a new conversation with only a clipboard ID when Tab asks AI', async () => {
+  it('opens Jarvis with only a clipboard reference when Tab asks AI', async () => {
     const perform = vi.fn()
     fixtures.load.mockResolvedValue([{ id: 'clip:fixture-id', title: 'private local preview', category: 'clipboard', perform }])
     render(<CommandRoot />); await screen.findByText('private local preview')
     await userEvent.setup().keyboard('{Tab}')
-    expect(fixtures.navigate).toHaveBeenCalledWith('/sessions?clipboard=fixture-id')
-    expect(perform).not.toHaveBeenCalled()
+    expect(await screen.findByRole('textbox', { name: '问 Jarvis' })).toBeInTheDocument()
+    expect(screen.getByText(/private local preview/)).toBeInTheDocument()
+    expect(fixtures.navigate).not.toHaveBeenCalled(); expect(perform).not.toHaveBeenCalled()
+  })
+  it('offers "ask Jarvis" for the typed text, first when it reads like a question', async () => {
+    fixtures.load.mockResolvedValue([{ id: 'clip:a', title: 'some clip', category: 'clipboard', perform: vi.fn() }])
+    render(<CommandRoot />); await screen.findByText('some clip')
+    await userEvent.setup().type(screen.getByRole('combobox'), '怎么把 json 转成表格')
+    const items = await screen.findAllByRole('option')
+    expect(items[0]).toHaveTextContent('问 Jarvis：怎么把 json 转成表格')
   })
   it('uses displayed number order and opens resource actions with the keyboard', async () => {
     const paste = vi.fn().mockResolvedValue(undefined), copy = vi.fn().mockResolvedValue(undefined)

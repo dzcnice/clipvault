@@ -734,7 +734,7 @@ export default function SettingsPage(): JSX.Element {
           >
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-pixel text-sm font-bold text-foreground">主题</div>
+                <div className="text-sm font-medium text-foreground">主题</div>
                 <p className="font-body mt-0.5 text-xs text-muted-foreground">
                   浅色 / 深色 / 跟随系统
                 </p>

@@ -16,8 +16,8 @@ export default function ProjectsPage(): JSX.Element {
         {work.data?.projects.map(project => <article key={project.id} className="cv-panel-soft p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{project.name}</h2><span className="cv-badge">{project.environment}</span></div>
           <p className="my-3 break-all font-mono text-xs text-muted-foreground">{project.directory}</p>
-          <p className="mb-4 whitespace-pre-wrap text-sm">{project.description || '尚未填写项目说明'}</p>{project.preanalysis && <p className="mb-3 text-xs text-[var(--blue)]">已开启报错预分析（只读、后台）</p>}
-          <div className="flex flex-wrap gap-2"><Link to="/workbench" state={{ projectId: project.id }} className="cv-btn cv-btn-primary">创建任务</Link><button className="cv-btn cv-btn-secondary" onClick={() => setForm(project)}>编辑项目</button></div>
+          <p className="mb-4 whitespace-pre-wrap text-sm">{project.description || '尚未填写项目说明'}</p>{project.preanalysis && <p className="mb-3 text-xs text-[var(--blue)]">已开启报错预分析（只读、后台）</p>}{project.web && <p className="mb-3 text-xs text-[var(--blue)]">已允许联网查资料</p>}
+          <div className="flex flex-wrap gap-2"><Link to="/sessions" state={{ projectId: project.id }} className="cv-btn cv-btn-primary">新会话</Link><button className="cv-btn cv-btn-secondary" onClick={() => setForm(project)}>编辑项目</button></div>
         </article>)}
       </div>
       <form className="cv-panel-soft space-y-4 self-start p-5" onSubmit={event => { event.preventDefault(); void work.act(async () => { await unwrap(window.api.workbench.saveProject(form)); setForm(blank) }, '项目已保存') }}>
@@ -30,6 +30,11 @@ export default function ProjectsPage(): JSX.Element {
           <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--blue)]" checked={form.preanalysis === true} onChange={event => setForm(old => ({ ...old, preanalysis: event.target.checked }))} />
           <span className="text-[13px] leading-relaxed"><span className="font-medium">复制报错时自动预分析</span>
             <span className="mt-0.5 block text-xs text-[var(--ink-faint)]">开启后，复制到本项目的报错会在后台用只读权限先分析一遍，结论放进收件箱。会把脱敏后的报错和相关代码发给模型；每次最多 6 次请求、3 分钟，每天最多 10 次；不修改文件、不运行命令。默认关闭。</span></span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-[12px] p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--blue)]" checked={form.web === true} onChange={event => setForm(old => ({ ...old, web: event.target.checked }))} />
+          <span className="text-[13px] leading-relaxed"><span className="font-medium">允许联网查资料</span>
+            <span className="mt-0.5 block text-xs text-[var(--ink-faint)]">开启后，本项目的会话可以搜索和读取公开网页（由本应用代为访问，拒绝局域网和本机地址，网址里出现已保存的密钥会被拦下）。网页内容只作资料，不当作指令。默认关闭。</span></span>
         </label>
         <div className="flex gap-2"><button className="cv-btn cv-btn-primary" disabled={work.busy || !form.directory}>保存项目</button>{form.id && <button type="button" className="cv-btn cv-btn-secondary" onClick={() => setForm(blank)}>取消编辑</button>}</div>
       </form>

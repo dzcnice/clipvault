@@ -8,7 +8,7 @@ import SessionPage from './SessionPage'
 const session = { id: 'session-fixture', title: '合成会话', projectId: 'project-fixture', directory: '/fixture', state: 'idle', permission: 'confirm', createdAt: 1, updatedAt: 1, pendingApprovals: 0, pendingQuestions: 0 }
 const api = { rename: vi.fn(), list: vi.fn(), create: vi.fn(), prompt: vi.fn(), events: vi.fn(), stop: vi.fn(), prewarm: vi.fn(), respondApproval: vi.fn(), answerQuestion: vi.fn(), onChanged: vi.fn() }
 beforeEach(() => {
-  vi.resetAllMocks()
+  vi.resetAllMocks(); localStorage.clear()
   api.list.mockResolvedValue([session]); api.events.mockResolvedValue([]); api.prewarm.mockResolvedValue(undefined); api.prompt.mockResolvedValue({ messageId: 'message' }); api.onChanged.mockReturnValue(() => {})
   Object.defineProperty(window, 'sessionAPI', { configurable: true, value: api })
   Object.defineProperty(window, 'api', { configurable: true, value: { workbench: { quickIndex: vi.fn().mockResolvedValue({ success: true, data: { projects: [{ id: 'project-fixture', name: '合成项目' }] } }) } } })
@@ -36,12 +36,30 @@ describe('native session interactions', () => {
     await user.click(screen.getByRole('button', { name: '收起上下文' }))
     expect(screen.getByRole('button', { name: '展开上下文' })).toHaveAttribute('aria-expanded', 'false')
   })
-  it('creates a session without requiring a goal or acceptance form', async () => {
+  it('starts a session straight from the welcome composer and sends the first message', async () => {
     api.create.mockResolvedValue(session)
     mount('/sessions')
-    fireEvent.click(await screen.findByRole('button', { name: '开始会话' }))
+    const input = await screen.findByRole('textbox', { name: '消息' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(api.create).not.toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: '帮我查一下' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
     await waitFor(() => expect(api.create).toHaveBeenCalledWith({ projectId: 'project-fixture', permission: 'confirm' }))
-    expect(await screen.findByRole('textbox', { name: '消息' })).toBeTruthy()
+    await waitFor(() => expect(api.prompt).toHaveBeenCalledWith({ sessionId: session.id, text: '帮我查一下' }))
+    expect(api.prompt).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('cv.session.project')).toBe('project-fixture')
+  })
+  it('lets the project and permission be picked from the composer', async () => {
+    api.create.mockResolvedValue(session)
+    window.api.workbench.quickIndex = vi.fn().mockResolvedValue({ success: true, data: { projects: [{ id: 'quick-ask', name: '随手问', builtin: 'quick', web: true }, { id: 'project-fixture', name: '合成项目', directory: '/fixture' }] } })
+    mount('/sessions')
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '项目' }))
+    await user.click(screen.getByRole('option', { name: /合成项目/ }))
+    await user.click(screen.getByRole('button', { name: '权限' }))
+    await user.click(screen.getByRole('option', { name: /只读/ }))
+    await user.type(screen.getByRole('textbox', { name: '消息' }), '看看结构{Enter}')
+    await waitFor(() => expect(api.create).toHaveBeenCalledWith({ projectId: 'project-fixture', permission: 'readonly' }))
   })
   it('sends with Enter and keeps Shift+Enter for composing', async () => {
     mount()
@@ -95,6 +113,6 @@ describe('native session interactions', () => {
     api.list.mockResolvedValue([])
     fireEvent.click(screen.getByRole('button', { name: '重试' }))
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-    expect(screen.getByRole('button', { name: '开始会话' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: '消息' })).toBeEnabled()
   })
 })
