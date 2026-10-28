@@ -66,7 +66,11 @@ export interface ClipVaultPrefs {
   /** 导出时要求生物识别确认 */
   biometricOnExport: boolean
   allowResourceUsernameAI: boolean
+  /** Jarvis 轻提示：复制报错、截图、账号串、长英文时给一个可点的建议。 */
+  jarvisHints: JarvisHints
 }
+export interface JarvisHints { error: boolean; image: boolean; credential: boolean; translate: boolean }
+export const DEFAULT_JARVIS_HINTS: JarvisHints = { error: true, image: true, credential: true, translate: false }
 
 const DEFAULTS: ClipVaultPrefs = {
   imagePasteMode: 'both',
@@ -90,7 +94,8 @@ const DEFAULTS: ClipVaultPrefs = {
   maskSecretsByDefault: true,
   biometricOnCopy: false,
   biometricOnExport: false,
-  allowResourceUsernameAI: false
+  allowResourceUsernameAI: false,
+  jarvisHints: { ...DEFAULT_JARVIS_HINTS }
 }
 
 function prefsPath(): string {
@@ -199,7 +204,8 @@ function normalizePrefs(raw: unknown): ClipVaultPrefs {
     maskSecretsByDefault: obj.maskSecretsByDefault !== false,
     biometricOnCopy: obj.biometricOnCopy === true,
     biometricOnExport: obj.biometricOnExport === true,
-    allowResourceUsernameAI: obj.allowResourceUsernameAI === true
+    allowResourceUsernameAI: obj.allowResourceUsernameAI === true,
+    jarvisHints: (() => { const value = (obj.jarvisHints ?? {}) as Partial<JarvisHints>; return { error: value.error !== false, image: value.image !== false, credential: value.credential !== false, translate: value.translate === true } })()
   }
 }
 

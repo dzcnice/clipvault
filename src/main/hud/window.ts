@@ -114,10 +114,20 @@ export function showHUD(): void {
   win.webContents.send('hud:shown')
 }
 
+/** 搜索模式 520×480；问 Jarvis 时放大到 680×640，水平居中保持不动。 */
+export const HUD_SIZES = { search: [520, 480], jarvis: [680, 640] } as const
+export function setHUDMode(mode: keyof typeof HUD_SIZES): void {
+  if (!hudWindow || hudWindow.isDestroyed()) return
+  const [width, height] = HUD_SIZES[mode]
+  const [x, y] = hudWindow.getPosition(), [current] = hudWindow.getSize()
+  hudWindow.setBounds({ x: Math.round((x ?? 0) + ((current ?? width) - width) / 2), y: y ?? 0, width, height }, false)
+}
+
 /** 隐藏 HUD */
 export function hideHUD(): void {
   if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
     hudWindow.hide()
+    setHUDMode('search')
     hudWindow.webContents.send('hud:hidden')
   }
 }

@@ -19,6 +19,8 @@ export function registerSessionHandlers(window: BrowserWindow): void {
         case 'rename': { const input = payload as { sessionId: string; title: string }; manager.rename(input.sessionId, input.title); break }
         case 'context': data = manager.context(payload as string); break
         case 'deleteSchedule': { const input = payload as { sessionId: string; id: string }; manager.removeSchedule(input.sessionId, input.id); break }
+        case 'setFlags': { const input = payload as { sessionId: string; pinned?: boolean; archived?: boolean }; manager.setFlags(input.sessionId, { pinned: input.pinned, archived: input.archived }); break }
+        case 'remove': await manager.remove(payload as string); break
         case 'create': data = await manager.createSession(payload as { projectId: string; title?: string; permission: SessionPermission }); break
         case 'prompt': { const input = payload as PromptInput & { sessionId: string }; data = await manager.prompt(input.sessionId, input); break }
         case 'events': { const input = payload as { sessionId: string; afterSeq: number }; data = manager.events(input.sessionId, input.afterSeq); break }

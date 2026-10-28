@@ -5,6 +5,7 @@
 import { BrowserWindow, globalShortcut } from 'electron'
 import { createHUDWindow, toggleHUD, hideHUD, showHUD, destroyHUDWindow } from './window'
 import { logger } from '../utils/logger'
+import { captureForeground } from '../jarvis/foreground'
 
 const HUD_TOGGLE_ACCELERATOR = 'Alt+Space'
 
@@ -22,6 +23,7 @@ export function initHUD(mainWindow: BrowserWindow): void {
   // 注册全局快捷键 Alt+Space
   try {
     const ok = globalShortcut.register(HUD_TOGGLE_ACCELERATOR, () => {
+      captureForeground()
       toggleHUD()
     })
     if (!ok) {

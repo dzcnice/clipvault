@@ -37,6 +37,8 @@ vi.mock('electron', () => {
     setAlwaysOnTop(): void {}
     setVisibleOnAllWorkspaces(): void {}
     setPosition(): void {}
+    getPosition(): [number, number] { return [0, 0] }
+    setBounds(): void {}
     getSize(): [number, number] {
       return [640, 480]
     }

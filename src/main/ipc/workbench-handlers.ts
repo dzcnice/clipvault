@@ -16,11 +16,12 @@ import { modelServiceStatus, saveModelService, listModelOptions } from '../workb
 import type { IntakeSource, IntakeCommit } from '../../types/resources'
 import { prepareIntake, revealIntake, commitIntake } from '../resources/intake'
 import { getHostManager } from '../harness-host/manager'
+import { quickProject } from '../workbench/quick'
 import { interceptedText } from '../clipboard/key-intercept'
 import { getClipboardItemById } from '../../db/clipboard-store'
 import { resourceSequence, resourceCode, copyResourceField } from '../resources/sequence'
 import { outboundRedact, redactOutboundValue } from '../workbench/redaction'
-import { getPrefs } from '../prefs'
+import { getPrefs, setPrefs, type JarvisHints } from '../prefs'
 import { ProjectFiles } from '../workbench/files'
 import { listInbox, settleInbox, dismissInbox, mutedInboxRules, muteInboxRule, onInboxChanged } from '../../db/inbox-store'
 import { applySuggestion } from '../clipboard/suggestions'
@@ -36,7 +37,9 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
   ipcMain.handle('workbench:call', wrapUnlockedHandler(async (_event, method: string, payload: unknown) => {
     try {
       const result = await dispatch(method, payload)
-      if (!['snapshot', 'task', 'parseResource', 'chooseDirectory', 'quickIndex', 'inbox', 'inboxMuted', 'resourceHealth', 'recall', 'prepareOrganize', 'modelService', 'listModels'].includes(method) && !window.isDestroyed()) window.webContents.send('workbench:changed')
+      // 预热中的 Host 带着旧的模型与项目设置：设置一变就回收，下一句按新设置启动。
+      if (['saveModelService', 'saveModel', 'saveProject', 'saveResource', 'revokeResource', 'saveJarvisSettings'].includes(method)) void getHostManager().discardWarm().catch(() => {})
+      if (!['snapshot', 'task', 'parseResource', 'chooseDirectory', 'quickIndex', 'inbox', 'inboxMuted', 'resourceHealth', 'recall', 'prepareOrganize', 'modelService', 'listModels', 'legacyCredentials', 'jarvisSettings'].includes(method) && !window.isDestroyed()) window.webContents.send('workbench:changed')
       return { success: true, data: result }
     } catch (error) { return { success: false, error: outboundRedact(error instanceof Error ? error.message : '操作失败，请重试').text } }
   }))
@@ -60,7 +63,7 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
         void manager.prompt(session.id, { text, mentions: suggestion.data.ids.map(id => ({ kind: 'clipboard', id })) }).then(() => settleInbox(suggestion.id, 'done')).catch(error => manager.reportPromptFailure(session.id, error))
         return session.id
       }
-      case 'quickIndex': return { resources: store.listResources(), tasks: redactOutboundValue(store.listTasks()), projects: store.listProjects() }
+      case 'quickIndex': return { resources: store.listResources(), tasks: redactOutboundValue(store.listTasks()), projects: [await quickProject(), ...store.listProjects()] }
       case 'snapshot': return service.snapshot()
       case 'templates': return templates()
       case 'saveTemplate': return saveTemplate(payload as Omit<TaskTemplate, 'id'>)
@@ -124,6 +127,11 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
         const { hideHUD } = await import('../hud/window'); hideHUD()
         window.hide(); try { return await resourceSequence.start(id) } catch (error) { window.show(); throw error }
       }
+      case 'autoType': {
+        const id = boundedText(payload, '资源 ID', 100, true)
+        const { hideHUD } = await import('../hud/window'); hideHUD()
+        window.hide(); try { return await resourceSequence.autoType(id) } catch (error) { window.show(); throw error }
+      }
       case 'resourceHistory': return store.resourceHistory(boundedText(payload, '资源 ID', 100, true))
       case 'sequenceState': return resourceSequence.state()
       case 'sequenceStop': resourceSequence.finish(); return true
@@ -131,6 +139,15 @@ export function registerWorkbenchHandlers(window: BrowserWindow): void {
       case 'saveResource': { const input = payload as ResourceInput; if (input.kind === 'model' || input.kind === 'api') endpointURL(input.endpoint ?? ''); return store.saveResource(input) }
       case 'revokeResource': store.revokeResource(boundedText(payload, '资源 ID', 100, true)); return true
       case 'importCredential': return store.importLegacyCredential(boundedText(payload, '凭据 ID', 100, true))
+      case 'legacyCredentials': return store.pendingLegacyCredentials()
+      case 'jarvisSettings': return { about: store.getAboutMe(), aboutLimit: store.ABOUT_ME_LIMIT, hints: getPrefs().jarvisHints }
+      case 'saveJarvisSettings': {
+        const input = payload as { about?: string; hints?: Partial<JarvisHints> }
+        if (typeof input.about === 'string') store.saveAboutMe(input.about)
+        if (input.hints && typeof input.hints === 'object') { const current = getPrefs().jarvisHints; setPrefs({ jarvisHints: { error: input.hints.error ?? current.error, image: input.hints.image ?? current.image, credential: input.hints.credential ?? current.credential, translate: input.hints.translate ?? current.translate } }) }
+        return { about: store.getAboutMe(), aboutLimit: store.ABOUT_ME_LIMIT, hints: getPrefs().jarvisHints }
+      }
+      case 'importAllCredentials': return store.importAllLegacyCredentials()
       case 'copyField': {
         const input = payload as { id: string; field: string; version: number }
         copyResourceField(input.id, input.field, input.version)

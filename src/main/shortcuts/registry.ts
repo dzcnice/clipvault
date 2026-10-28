@@ -15,6 +15,22 @@ export function buildDefaultCommands(
   return [
     { id: 'resource.pasteNext', defaultAccelerator: 'Alt+Shift+V', label: '粘贴下一个资源字段', handler: () => { void resourceSequence.next().catch(() => {}) } },
     {
+      id: 'jarvis.capture',
+      defaultAccelerator: 'Alt+Shift+S',
+      label: '截图问 AI',
+      handler: () => {
+        // 调起系统框选截图；截到后交给 Jarvis（浮窗可用时在浮窗里问，否则在主窗口新会话里问）。
+        void import('../jarvis/capture').then(({ captureScreenRegion }) => captureScreenRegion()).then(async id => {
+          if (!id) return
+          const { openJarvisWith } = await import('../jarvis/panel')
+          if (openJarvisWith({ clipboardId: id })) return
+          const win = getWindow()
+          if (!win) return
+          win.show(); win.focus(); win.webContents.send('jarvis:captured', id)
+        }).catch(() => {})
+      }
+    },
+    {
       id: 'window.toggle',
       defaultAccelerator: 'CommandOrControl+Space',
       label: '显示/隐藏主窗口',

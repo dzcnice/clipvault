@@ -10,6 +10,7 @@ export type ShortcutCommandId =
   | 'clipboard.pasteRecent'
   | 'hud.toggle'
   | 'resource.pasteNext'
+  | 'jarvis.capture'
 
 /** 单个命令定义 */
 export interface ShortcutCommand {

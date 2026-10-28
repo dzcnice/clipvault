@@ -18,6 +18,8 @@ import { logger } from './utils/logger'
 import { safeOpenExternal } from './security/open-external'
 import { stopWorkbench } from './workbench/service'
 import { isWorkbenchPreview, configureWorkbenchProfile } from './app-identity'
+import { OcrQueue } from './clipboard/ocr-queue'
+import { startJarvisHints } from './jarvis/hints'
 import {
   registerTrustedWebContents,
   unregisterTrustedWebContents,
@@ -252,6 +254,16 @@ app.whenReady().then(() => {
 
   // 启动自动备份（每24小时）
   startAutoBackup(24)
+
+  // Jarvis 轻提示：复制报错、截图、账号串等之后给一个可点的建议（设置里可逐类关闭）。
+  startJarvisHints(() => mainWindow)
+
+  // 剪贴板图片的本机 OCR：启动后稍等再开始补算，新复制的图片优先。
+  if (process.platform === 'win32') {
+    void import('./workbench/attachments').then(({ recognizeImage }) => {
+      new OcrQueue(recognizeImage, id => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('clipboard:ocr-done', id) }).start()
+    }).catch(error => logger.warn('[ocr] 未能启动后台识别：' + String(error)))
+  }
   logger.info('[App] Auto backup started')
 
   // v3.0 个人本地版：不再启动 Tailscale overlay / P2P
