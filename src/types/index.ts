@@ -42,6 +42,9 @@ export const IPC_CHANNELS = {
   CLIPBOARD_COPY_PATH: 'clipboard:copyPath',
   /** 列表项缩略图（小 JPEG Data URL） */
   CLIPBOARD_GET_THUMBNAIL: 'clipboard:getThumbnail',
+  CLIPBOARD_GET_IMAGE: 'clipboard:getImage',
+  CLIPBOARD_SAVE_PASTED_IMAGE: 'clipboard:savePastedImage',
+  JARVIS_CAPTURE: 'jarvis:capture',
   CLIPBOARD_CREATE_SNIPPET: 'clipboard:createSnippet',
   CLIPBOARD_UPDATE_SNIPPET: 'clipboard:updateSnippet',
   CLIPBOARD_GET_SNIPPETS: 'clipboard:getSnippets',

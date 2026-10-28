@@ -22,6 +22,9 @@ export interface ClipboardItem {
   category?: ClipCategory
   projectId?: string | null
   aiMeta?: { title: string; summary: string }
+  /** 图片的本机 OCR 文字（加密存储，解锁后可见） */
+  ocrText?: string
+  ocrState?: 'done' | 'empty' | 'failed'
   /** 唯一标识 */
   id: string
   /** 内容类型 */

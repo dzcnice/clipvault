@@ -10,6 +10,9 @@ export interface HostSessionSummary {
   planMode?: boolean
   /** 后台会话（L2 预分析）不出现在会话列表中。 */
   hidden?: 'preanalysis'
+  /** 侧栏置顶 / 已归档（归档的会话不在侧栏，仍可在历史里找到）。 */
+  pinned?: boolean
+  archived?: boolean
   inboxId?: string
 }
 export interface QuestionItem { id: string; question: string; header?: string; detail?: string; options?: Array<{ label: string; description?: string }>; multiSelect?: boolean }
@@ -30,6 +33,8 @@ export interface SessionAPI {
   rename(input: { sessionId: string; title: string }): Promise<void>
   context(id: string): Promise<SessionContext>
   deleteSchedule(input: { sessionId: string; id: string }): Promise<void>
+  setFlags(input: { sessionId: string; pinned?: boolean; archived?: boolean }): Promise<void>
+  remove(sessionId: string): Promise<void>
   list(): Promise<HostSessionSummary[]>
   create(input: { projectId: string; title?: string; permission: SessionPermission }): Promise<HostSessionSummary>
   prompt(input: PromptInput & { sessionId: string }): Promise<{ messageId: string }>

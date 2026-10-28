@@ -7,8 +7,12 @@ export interface WorkProject {
   createdAt: number; updatedAt: number; archived: boolean; packageName?: string
   /** L2：复制到本项目的报错是否在后台做只读预分析；默认关闭。 */
   preanalysis?: boolean
+  /** 允许本项目的会话联网查资料（主进程代为出网）；随手问默认开启。 */
+  web?: boolean
+  /** 内置项目：随手问使用应用私有空目录，不能编辑。 */
+  builtin?: 'quick'
 }
-export interface ProjectInput { id?: string; name: string; description?: string; directory: string; environment?: string; packageName?: string; preanalysis?: boolean }
+export interface ProjectInput { id?: string; name: string; description?: string; directory: string; environment?: string; packageName?: string; preanalysis?: boolean; web?: boolean }
 export type FieldRole = 'username' | 'password' | 'api_key' | 'token' | 'totp_seed' | 'host' | 'port' | 'database' | 'connection_string' | 'other'
 export interface ResourceMetadata { aliases?: string[]; tags?: string[]; loginUrl?: string; rotateAfterDays?: number; notes?: string }
 export interface ResourceFieldInput { name: string; value: string; secret: boolean; role?: FieldRole }
