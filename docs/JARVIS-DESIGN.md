@@ -146,3 +146,17 @@ J1–J6 已实现。暂不做的两项（语音唤醒、跨设备同步）不变
 质量门：`tsc --build` 通过；ESLint 0 error / 0 warning；**115 文件 / 665 用例通过**；`build:harness` 138 个运行时文件；`verify-official-harness` 通过；`electron-vite build` 通过；`verify-desktop-workbench` 真实 Electron **20 状态通过**（临时资料目录）。
 
 仍未验证：真实模型服务的识图能力与联网质量、Windows OCR 在用户机器上的识别语言、自动输入在各浏览器/客户端登录框里的实际表现、系统通知点击行为。这些需要在用户真实环境中试用确认。
+
+## 8. 从原版 ClipVault 导入（发布前补齐）
+
+原版 3.x 的免密保险库用 Electron safeStorage 包裹数据钥匙（`v10` + AES-256-GCM），密钥在原版资料目录的 `Local State` 中、受 Windows DPAPI（当前用户）保护。新版是另一个程序，因此在 `src/main/legacy-import.ts` 中按同样格式在本机解开：
+
+1. 自动定位 `%APPDATA%\clipvault`（也可以手动选目录），连同 WAL 复制到新版资料目录下的临时工作目录，`VACUUM INTO` 得到一致快照；原版只读。
+2. DPAPI 解开 `os_crypt.encrypted_key`，再解开 `vault_meta.encrypted_dek` 得到原版数据钥匙；主密码模式改用原版主密码。
+3. 原版图片（明文或 CVIMG）按合并格式封装进快照；原路径失效时按文件名在原版 `images` 目录里查找。
+4. 复用「旧资料合并」：确认对话框显示数量，合并前备份当前资料，原记录不覆盖，重复跳过；结束后删除临时工作目录、清零钥匙。
+5. 已经合并过同一份原版资料（同一把钥匙留下的合并索引）时不再提示，手动导入时给出可能重复的警告。
+
+证据：`legacy-import.integration.test.ts`（合成原版资料：钥匙解包、文字/凭证/TOTP/图片合并、原版文件哈希不变、重复导入全部跳过、错误用户与损坏钥匙拒绝）。在用户真实原版资料上做了只读演练：全新临时资料目录在约 1 秒内导入剪贴板 508 条、凭证 7 条、图片 124 张，515 条记录全部可解密，原版数据库与 Local State 前后哈希一致；演练目录已删除。
+
+质量门（含本节）：116 文件 / 667 用例通过；Lint 0。
