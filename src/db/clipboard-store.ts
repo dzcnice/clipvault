@@ -77,6 +77,9 @@ interface ClipboardRow {
   category: ClipboardItem['category'] | null
   project_id: string | null
   ai_meta: string | null
+  ocr_encrypted?: Buffer | Uint8Array | null
+  ocr_nonce?: Buffer | Uint8Array | null
+  ocr_state?: 'done' | 'empty' | 'failed' | null
 }
 
 interface CountRow {
@@ -160,7 +163,8 @@ function rowToClipboardItem(
     }
   }
   const { content, preview, decryptError } = decryptRowContent(row)
-  let aiMeta: ClipboardItem['aiMeta']
+  let aiMeta: ClipboardItem['aiMeta'], ocrText: string | undefined
+  if (row.ocr_encrypted && row.ocr_nonce && vault.isUnlocked()) try { ocrText = vault.decryptBytesWithDEK(asBuffer(row.ocr_encrypted), asBuffer(row.ocr_nonce)) } catch { /* OCR 是可重算的附加信息 */ }
   if (row.ai_meta) try { aiMeta = JSON.parse(vault.decryptWithDEK(row.ai_meta)) as ClipboardItem['aiMeta'] } catch { /* Preserve corrupt optional metadata and original content. */ }
   return {
     id: row.id,
@@ -169,6 +173,7 @@ function rowToClipboardItem(
     category: row.category ?? classifyClip({ type: row.type, text: content ?? row.file_path ?? '' }).category,
     projectId: row.project_id,
     aiMeta,
+    ...(ocrText ? { ocrText } : {}), ...(row.ocr_state ? { ocrState: row.ocr_state } : {}),
     ...(decryptError ? { decryptError: true } : {}),
     imageData,
     imagePath,
@@ -373,7 +378,7 @@ function historyQuery(
 const HISTORY_ORDER = 'is_pinned DESC, COALESCE(last_copied_at, created_at) DESC, id ASC'
 
 function matchesKeyword(item: ClipboardItem, keyword: string, fuzzyPreview = false): boolean {
-  if ([item.content, item.preview, item.aiMeta?.title, item.aiMeta?.summary, item.snippetName, item.filePath, item.sourceApp, ...item.tags]
+  if ([item.content, item.preview, item.aiMeta?.title, item.aiMeta?.summary, item.snippetName, item.filePath, item.sourceApp, item.ocrText, ...item.tags]
     .filter(Boolean).join('\n').toLowerCase().includes(keyword)) return true
   return fuzzyPreview && Boolean(fuzzyMatch(keyword, item.snippetName || item.preview.slice(0, 80)))
 }
@@ -522,6 +527,19 @@ function rowsToItems(rows: ClipboardRow[], loadImage = false): ClipboardItem[] {
   return rows.map((row) =>
     rowToClipboardItem(row, tagsMap.get(row.id) ?? [], loadImage)
   )
+}
+
+/** 等待本机 OCR 的图片（新到的优先）。 */
+export function pendingOcrImages(limit = 20): Array<{ id: string; imagePath: string }> {
+  assertVaultUnlocked()
+  return (getDatabase().prepare("SELECT id, image_path FROM clipboard_history WHERE type = 'image' AND image_path IS NOT NULL AND ocr_state IS NULL ORDER BY created_at DESC LIMIT ?")
+    .all(pageSize(limit, 20, 200)) as Array<{ id: string; image_path: string }>).map(row => ({ id: row.id, imagePath: row.image_path }))
+}
+/** 保存识别结果（加密）；空结果与失败也记录，避免反复识别。 */
+export function setClipboardOcr(id: string, state: 'done' | 'empty' | 'failed', text = ''): void {
+  assertVaultUnlocked()
+  const encrypted = state === 'done' && text ? vault.encryptBytesWithDEK(text.slice(0, 20_000)) : null
+  getDatabase().prepare('UPDATE clipboard_history SET ocr_encrypted = ?, ocr_nonce = ?, ocr_state = ? WHERE id = ?').run(encrypted?.cipher ?? null, encrypted?.nonce ?? null, state, id)
 }
 
 export function getClipboardImagePath(id: string): string | null {

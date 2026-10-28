@@ -20,9 +20,21 @@ type RunRow = { id: string; task_id: string; session_id: string; runtime_version
 function projectFrom(row: ProjectRow): WorkProject {
   return { id: row.id, name: row.name, ...decrypt<Pick<WorkProject, 'description' | 'directory' | 'environment'>>(row.data), archived: !!row.archived, createdAt: row.created_at, updatedAt: row.updated_at }
 }
+/** 内置「随手问」项目的固定 ID；不出现在项目列表、分类与资源归属中。 */
+export const QUICK_PROJECT_ID = 'quick-ask'
 export function listProjects(): WorkProject[] {
   unlocked()
-  return (getDatabase().prepare('SELECT * FROM wb_projects ORDER BY archived, updated_at DESC').all() as ProjectRow[]).map(projectFrom)
+  return (getDatabase().prepare('SELECT * FROM wb_projects WHERE id <> ? ORDER BY archived, updated_at DESC').all(QUICK_PROJECT_ID) as ProjectRow[]).map(projectFrom)
+}
+/** 创建或校正随手问项目：应用私有空目录、允许联网、不可编辑。 */
+export function ensureQuickProject(directory: string): WorkProject {
+  unlocked()
+  const row = getDatabase().prepare('SELECT * FROM wb_projects WHERE id = ?').get(QUICK_PROJECT_ID) as ProjectRow | undefined
+  if (row) { const current = projectFrom(row); if (current.directory === directory && current.builtin === 'quick') return current }
+  const now = Date.now()
+  getDatabase().prepare(`INSERT INTO wb_projects (id,name,data,created_at,updated_at) VALUES (?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`).run(QUICK_PROJECT_ID, '随手问', encrypt({ directory, environment: 'personal', description: '不关联代码目录的日常问答，可联网，可引用剪贴板和资源。', packageName: '', preanalysis: false, web: true, builtin: 'quick' }), row?.created_at ?? now, now)
+  return getProject(QUICK_PROJECT_ID)
 }
 export function getProject(id: string): WorkProject {
   unlocked()
@@ -37,9 +49,10 @@ export function saveProject(input: ProjectInput): WorkProject {
   const environment = boundedText(input.environment ?? 'development', '环境', 40, true)
   const description = boundedText(input.description ?? '', '项目说明', 4000)
   const id = input.id ?? randomUUID(), now = Date.now()
+  if (id === QUICK_PROJECT_ID) throw new Error('随手问是内置项目，不能编辑')
   if (input.id) getProject(input.id)
   getDatabase().prepare(`INSERT INTO wb_projects (id,name,data,created_at,updated_at) VALUES (?,?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET name=excluded.name,data=excluded.data,updated_at=excluded.updated_at`).run(id, name, encrypt({ directory, environment, description, packageName: boundedText(input.packageName ?? '', '包名', 200), preanalysis: input.preanalysis === true }), now, now)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,data=excluded.data,updated_at=excluded.updated_at`).run(id, name, encrypt({ directory, environment, description, packageName: boundedText(input.packageName ?? '', '包名', 200), preanalysis: input.preanalysis === true, web: input.web === true }), now, now)
   return getProject(id)
 }
 
@@ -151,6 +164,42 @@ export function importLegacyCredential(id: string): WorkResource {
     getDatabase().prepare('UPDATE wb_resources SET legacy_credential_id=? WHERE id=?').run(id, resource.id)
     return getResource(resource.id)
   })
+}
+
+/** Jarvis 的「关于我」：用户自己写或确认过的偏好，加密保存，注入系统提示。 */
+export const ABOUT_ME_LIMIT = 4000
+export function getAboutMe(): string {
+  unlocked()
+  const row = getDatabase().prepare("SELECT data FROM wb_settings WHERE key='jarvis.about'").get() as { data: string } | undefined
+  return row ? decrypt<string>(row.data) : ''
+}
+export function saveAboutMe(text: string): string {
+  unlocked()
+  const value = boundedText(text, '关于我', ABOUT_ME_LIMIT).trim()
+  getDatabase().prepare("INSERT INTO wb_settings (key,data) VALUES ('jarvis.about',?) ON CONFLICT(key) DO UPDATE SET data=excluded.data").run(encrypt(value))
+  return value
+}
+/** 追加一条已确认的记忆；重复内容不再追加，超过上限时拒绝。 */
+export function appendAboutMe(note: string): string {
+  const current = getAboutMe(), line = `- ${note.trim()}`
+  if (current.split('\n').some(item => item.trim() === line)) return current
+  const next = current ? `${current}\n${line}` : line
+  if (next.length > ABOUT_ME_LIMIT) throw new Error('「关于我」已满，请先在 Jarvis 设置里整理')
+  return saveAboutMe(next)
+}
+
+/** 还没并入资源的原有凭证数量。 */
+export function pendingLegacyCredentials(): number {
+  unlocked()
+  return (getDatabase().prepare("SELECT COUNT(*) AS n FROM credentials WHERE id NOT IN (SELECT legacy_credential_id FROM wb_resources WHERE legacy_credential_id IS NOT NULL)").get() as { n: number }).n
+}
+/** 把全部原有凭证（含 TOTP）并入资源；原记录保留只读，已并入的跳过，单条失败不影响其余。 */
+export function importAllLegacyCredentials(): { imported: number; failed: number } {
+  unlocked()
+  const ids = (getDatabase().prepare("SELECT id FROM credentials WHERE id NOT IN (SELECT legacy_credential_id FROM wb_resources WHERE legacy_credential_id IS NOT NULL) ORDER BY created_at").all() as Array<{ id: string }>).map(row => row.id)
+  let imported = 0, failed = 0
+  for (const id of ids) { try { importLegacyCredential(id); imported++ } catch { failed++ } }
+  return { imported, failed }
 }
 
 function taskFrom(row: TaskRow): WorkTask {

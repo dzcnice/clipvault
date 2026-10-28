@@ -127,3 +127,22 @@ export function saveSessionReceipt(sessionId: string, id: string, operation: str
 export function sessionReceipts(sessionId: string): Array<{ id: string; operation: string; state: string; data: Record<string, unknown> }> {
   return (getDatabase().prepare('SELECT * FROM wb_session_receipts WHERE session_id=? ORDER BY updated_at').all(sessionId) as Array<{ id: string; operation: string; state: string; data: string }>).map(item => ({ ...item, data: decrypt<Record<string, unknown>>(item.data) }))
 }
+/** 按 ID 读取单条会话回执（例如识图图片），不解密其他回执。 */
+export function sessionReceipt(sessionId: string, id: string): { id: string; operation: string; state: string; data: Record<string, unknown> } | undefined {
+  const row = getDatabase().prepare('SELECT * FROM wb_session_receipts WHERE session_id=? AND id=?').get(sessionId, id) as { id: string; operation: string; state: string; data: string } | undefined
+  return row ? { ...row, data: decrypt<Record<string, unknown>>(row.data) } : undefined
+}
+
+/** 彻底删除一个会话及其子会话：事件、回执、提醒、剪贴板引用一起删，在同一事务里完成。 */
+export function deleteSessionFamily(rootId: string): string[] {
+  const children = sessionReceipts(rootId).filter(item => item.operation === 'child_session').map(item => item.id)
+  const ids = [...children, rootId]
+  transaction(() => {
+    const db = getDatabase()
+    for (const id of ids) {
+      for (const table of ['wb_schedules', 'wb_session_clipboard_refs', 'wb_session_receipts', 'wb_session_events']) db.prepare(`DELETE FROM ${table} WHERE session_id=?`).run(id)
+      db.prepare('DELETE FROM wb_sessions WHERE id=?').run(id)
+    }
+  })
+  return ids
+}

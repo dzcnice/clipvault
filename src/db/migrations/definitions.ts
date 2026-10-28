@@ -679,6 +679,7 @@ import { harnessSessionMigration } from './harness'
 import { clipboardCategoryMigration, resourceRolesMigration } from './native-resources'
 import { inboxMigration } from './inbox'
 import { scheduleMigration } from './schedule'
+import { clipboardOcrMigration } from './clipboard-ocr'
 
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   migration001,
@@ -710,5 +711,6 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   clipboardCategoryMigration,
   resourceRolesMigration,
   inboxMigration,
-  scheduleMigration
+  scheduleMigration,
+  clipboardOcrMigration
 ]
