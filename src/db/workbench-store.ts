@@ -188,6 +188,23 @@ export function appendAboutMe(note: string): string {
   return saveAboutMe(next)
 }
 
+/** 旧资料合并留下的来源索引是否存在（只看键，不解密内容）。 */
+export function hasMergeIndex(identity: string): boolean {
+  unlocked()
+  return !!getDatabase().prepare('SELECT 1 FROM wb_settings WHERE key=?').get(`merge:${identity}`)
+}
+
+/** 从原版 ClipVault 导入的记录（加密）：用于不再重复提示。 */
+export function legacyImportRecord(): { at: number; clipboard: number; credentials: number; images: number } | null {
+  unlocked()
+  const row = getDatabase().prepare("SELECT data FROM wb_settings WHERE key='legacy.imported'").get() as { data: string } | undefined
+  return row ? decrypt(row.data) : null
+}
+export function saveLegacyImportRecord(record: { at: number; clipboard: number; credentials: number; images: number }): void {
+  unlocked()
+  getDatabase().prepare("INSERT INTO wb_settings (key,data) VALUES ('legacy.imported',?) ON CONFLICT(key) DO UPDATE SET data=excluded.data").run(encrypt(record))
+}
+
 /** 还没并入资源的原有凭证数量。 */
 export function pendingLegacyCredentials(): number {
   unlocked()
