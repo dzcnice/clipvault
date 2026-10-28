@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { ResourceDraft, ResourceFieldInput } from '../../types/workbench'
+import { parseAccountCombo } from '../clipboard/account-combo'
 
 export const secretName = (name: string): boolean => /password|passwd|pwd|secret|token|api.?key|private.?key|(^|[_ -])key($|[_ -])|authorization|密码|密钥|令牌/i.test(name)
 export function fingerprint(text: string): string { return createHash('sha256').update(text).digest('hex') }
@@ -35,6 +36,17 @@ export function parseResourceText(text: string): ResourceDraft {
     fields.push({ name, value, secret: secretName(name) || !/^(user(name)?|account|账号|用户名|host|port|database|邮箱|email)$/i.test(name) })
   }
   let parsedJson = false
+  // 单行账号串（账号|密码|附加…、账号----密码、邮箱:密码）：拆成用户名、密码与附加字段。
+  const combo = !text.includes('\n') ? parseAccountCombo(text) : null
+  if (combo) {
+    add('username', combo.username, true); add('password', combo.password, true)
+    combo.extras.forEach((value, index) => {
+      const name = /^[A-Z2-7]{16,}=*$/.test(value.replace(/\s/g, '')) ? '验证码种子' : /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/.test(value) ? '备用联系方式' : `附加信息${index + 1}`
+      fields.push({ name, value, secret: name !== '备用联系方式' })
+    })
+    suggested.kind = 'account'
+    return { fields, endpoint, warnings: ['已按账号串格式拆分，请确认用户名和密码是否正确'], suggested }
+  }
   try {
     const json: unknown = JSON.parse(text)
     if (json && typeof json === 'object' && !Array.isArray(json)) {

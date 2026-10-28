@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-interface Block { type: string; text?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string; content?: string | Block[] }
+interface Block { type: string; text?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string; content?: string | Block[]; source?: { type: string; media_type?: string; data?: string } }
 interface Message { role: string; content: string | Block[] }
 function plain(content: string | Block[] | undefined): string {
   if (typeof content === 'string') return content
@@ -13,12 +13,15 @@ export function toOpenAI(data: Record<string, unknown>, stream = false): Record<
   if (system) messages.push({ role: 'system', content: system })
   for (const message of data.messages as Message[]) {
     const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
-    if (blocks.some(block => !['text', 'tool_use', 'tool_result', 'thinking', 'redacted_thinking'].includes(block.type))) throw new Error('模型协议暂不支持此种资料类型')
+    if (blocks.some(block => !['text', 'tool_use', 'tool_result', 'thinking', 'redacted_thinking', ...(message.role === 'user' ? ['image'] : [])].includes(block.type))) throw new Error('模型协议暂不支持此种资料类型')
     const calls = blocks.filter(block => block.type === 'tool_use').map(block => ({ id: block.id, type: 'function', function: { name: block.name, arguments: JSON.stringify(block.input ?? {}) } }))
     if (message.role === 'assistant') messages.push({ role: 'assistant', content: plain(blocks) || null, ...(calls.length ? { tool_calls: calls } : {}) })
     else {
       for (const block of blocks.filter(block => block.type === 'tool_result')) messages.push({ role: 'tool', tool_call_id: block.tool_use_id, content: plain(block.content) })
-      if (plain(blocks)) messages.push({ role: 'user', content: plain(blocks) })
+      // 识图：用户消息里的图片块按 OpenAI 兼容的多段内容发送，文字与图片保持原顺序。
+      if (blocks.some(block => block.type === 'image')) messages.push({ role: 'user', content: blocks.flatMap<Record<string, unknown>>(block => block.type === 'text' && block.text ? [{ type: 'text', text: block.text }]
+        : block.type === 'image' && block.source?.type === 'base64' ? [{ type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } }] : []) })
+      else if (plain(blocks)) messages.push({ role: 'user', content: plain(blocks) })
     }
   }
   const tools = (data.tools as Array<{ name: string; description?: string; input_schema: unknown }> | undefined)?.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description ?? '', parameters: tool.input_schema } }))

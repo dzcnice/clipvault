@@ -63,7 +63,7 @@ export function openMergeBackup(path: string, password?: string): { preview: Mer
     const clipboardTags = grouped('clipboard_tags', 'clipboard_id')
     const occurrences = grouped('clipboard_occurrences', 'clipboard_id')
     const resourceFields = grouped('wb_resource_fields', 'resource_id')
-    const clips = rows('clipboard_history'), credentials = rows('credentials'), projects = rows('wb_projects'), resources = rows('wb_resources')
+    const clips = rows('clipboard_history'), credentials = rows('credentials'), projects = rows('wb_projects').filter(row => row.id !== 'quick-ask'), resources = rows('wb_resources')
     if (clips.length + credentials.length + resources.length > 100_000) throw new Error('备份记录过多，请分批导入')
     // Preflight authenticates every selected encrypted record before the confirmation dialog or destination writes.
     for (const row of credentials) if (row.value_encrypted === 1) decrypt(String(row.value))

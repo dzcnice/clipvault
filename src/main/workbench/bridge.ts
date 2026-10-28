@@ -6,6 +6,7 @@ import { requestNetwork } from './network'
 import { toOpenAI, fromOpenAI } from './model-protocol'
 import { containsSecrets, redactOutboundValue } from './redaction'
 import { forwardModelStream } from './model-stream'
+import { expandImages, type VisionImage } from './vision'
 
 export function endpointURL(value: string): URL {
   const url = new URL(boundedText(value, '服务地址', 2048, true))
@@ -20,6 +21,9 @@ interface Options {
   session?: (input: Record<string, unknown>) => unknown
   control?: (operation: string, input: Record<string, unknown>) => Promise<unknown>
   streaming?: boolean
+  /** 识图：按 ID 取回本会话的图片；模型拒收图片时回调一次。 */
+  images?: (id: string) => VisionImage | undefined
+  onVisionFallback?: () => void
 }
 async function readBody(request: IncomingMessage): Promise<string> {
   let body = ''
@@ -77,7 +81,15 @@ export async function createBridge(options: Options): Promise<{ url: string; tok
       response.once('close', () => disconnected.abort())
       const signal = AbortSignal.any([options.signal, disconnected.signal, AbortSignal.timeout(120_000)])
       const allowedTools = (data.tools as Array<{ name: string }> | undefined)?.map(tool => tool.name) ?? []
-      const upstream = await requestNetwork(url, { method: 'POST', redirect: 'error', signal, headers, body: JSON.stringify(openAI ? toOpenAI(data, options.streaming === true) : data) })
+      const send = (payload: Record<string, unknown>): Promise<Response> => requestNetwork(url, { method: 'POST', redirect: 'error', signal, headers, body: JSON.stringify(openAI ? toOpenAI(payload, options.streaming === true) : payload) })
+      const expanded = options.images && body.includes('[[图片:') ? expandImages(data, options.images) : { data, count: 0 }
+      let upstream = await send(expanded.data)
+      // 模型不支持识图时（通常 400/415/422），去掉图片、保留图片文字重试一次。
+      if (expanded.count > 0 && [400, 415, 422].includes(upstream.status)) {
+        await upstream.body?.cancel().catch(() => {})
+        options.onVisionFallback?.()
+        upstream = await send(expandImages(data, options.images!, false).data)
+      }
       if (!upstream.ok || !upstream.body) throw new Error(`模型服务请求失败（HTTP ${upstream.status}）`)
       if (options.streaming && upstream.headers.get('content-type')?.includes('text/event-stream')) {
         await forwardModelStream(upstream, response, { openAI, model: options.model.model, allowedTools, secrets: options.secrets, signal })
