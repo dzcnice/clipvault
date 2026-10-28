@@ -44,6 +44,10 @@ export const workbenchAPI = {
   /** 自动输入：用户名 → Tab → 密码（不提交），验证码留给 Alt+Shift+V。 */
   autoType: (id: string) => call<ResourceSequenceState>('autoType', id),
   legacyCredentials: () => call<number>('legacyCredentials'),
+  /** 原版 ClipVault 资料是否存在、是否已导入。 */
+  legacyProfile: () => call<{ found: boolean; dir: string; bytes: number; imported: { at: number; clipboard: number; credentials: number; images: number } | null }>('legacyProfile'),
+  /** 从原版 ClipVault 导入（原版只读，不覆盖当前记录）；取消时返回 null。 */
+  importLegacy: (input: { password?: string; choose?: boolean } = {}) => call<{ clipboard: number; credentials: number; resources: number; projects: number; skipped: number; missingImages: number; images: number } | null>('importLegacy', input),
   jarvisSettings: () => call<JarvisSettings>('jarvisSettings'),
   saveJarvisSettings: (input: { about?: string; hints?: Partial<JarvisSettings['hints']> }) => call<JarvisSettings>('saveJarvisSettings', input),
   importAllCredentials: () => call<{ imported: number; failed: number }>('importAllCredentials'),
