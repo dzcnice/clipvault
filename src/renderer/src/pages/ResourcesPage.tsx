@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ResourceHealth } from '@/types/inbox'
-import { Copy, Check, KeyRound, ExternalLink, Plus, Search, Play, LogIn, MessageSquarePlus, PencilLine, Ban, Server, Globe, Database, TerminalSquare, FileText, Link2, Cpu } from 'lucide-react'
+import { Copy, Check, KeyRound, ExternalLink, Plus, Search, Play, LogIn, MessageSquarePlus, PencilLine, Ban, Server, Globe, Database, TerminalSquare, FileText, Link2, Cpu, Import } from 'lucide-react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import type { ResourceInput, WorkResource } from '@/types/workbench'
 import { useWorkbench, unwrap } from '../hooks/useWorkbench'
@@ -25,6 +25,8 @@ function CopyButton({ label, disabled, onCopy }: { label: string; disabled: bool
 
 export default function ResourcesPage(): JSX.Element {
   const [legacyCount, setLegacyCount] = useState(0)
+  const [legacyProfile, setLegacyProfile] = useState<{ found: boolean; dir: string; imported: unknown }>()
+  useEffect(() => { void window.api.workbench.legacyProfile?.().then(result => { if (result.success && result.data) setLegacyProfile(result.data) }).catch(() => {}) }, [])
   useEffect(() => { void window.api.workbench.legacyCredentials?.().then(result => { if (result.success) setLegacyCount(result.data ?? 0) }).catch(() => {}) }, [])
   const { id } = useParams(), navigate = useNavigate()
   const [creating, setCreating] = useState(false)
@@ -87,6 +89,11 @@ export default function ResourcesPage(): JSX.Element {
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-[var(--primary)] text-[var(--primary-foreground)]"><KeyRound size={18} strokeWidth={1.75} /></span>
                 <span className="min-w-0 flex-1"><span className="block text-[15px] font-medium">{resources.length ? '把新的账号和密钥交给这里' : '把常用账号和密钥交给这里'}</span><span className="mt-0.5 block text-[13px] text-[var(--ink-faint)]">粘贴一段资料并说一句用途，本地整理字段，检查后加密保存。之后每个字段都能单独复制、依次粘贴。</span></span>
                 <Plus {...icon} className="text-[var(--ink-faint)] transition-transform duration-300 group-hover:rotate-90" /></button>
+              {legacyProfile?.found && !legacyProfile.imported && <section className="cv-rise flex items-center gap-4 rounded-[16px] bg-[var(--primary-soft)] p-4" style={{ '--i': 1 } as React.CSSProperties}>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[var(--surface)] text-[var(--blue)] shadow-[var(--shadow-sm)]"><Import size={17} strokeWidth={1.75} /></span>
+                <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">发现原版 ClipVault 的资料</span><span className="mt-0.5 block truncate text-[12.5px] text-[var(--ink-soft)]" title={legacyProfile.dir}>剪贴板、凭证、TOTP 和图片可以一起带过来；原版只读不改，重复的会跳过。</span></span>
+                <button className="cv-btn cv-btn-primary shrink-0" disabled={work.busy} onClick={() => void work.act(async () => { const result = await unwrap(window.api.workbench.importLegacy({})); if (result) { setLegacyProfile(old => old && { ...old, imported: { at: Date.now(), clipboard: result.clipboard, credentials: result.credentials, images: result.images } }); const count = await window.api.workbench.legacyCredentials(); if (count.success) setLegacyCount(count.data ?? 0) } return result }, '原版资料已导入')}>导入</button>
+              </section>}
               {legacyCount > 0 && <section className="cv-rise flex items-center gap-4 rounded-[16px] bg-[var(--primary-soft)] p-4" style={{ '--i': 1 } as React.CSSProperties}>
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[var(--surface)] text-[var(--blue)] shadow-[var(--shadow-sm)]"><KeyRound size={17} strokeWidth={1.75} /></span>
                 <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">还有 {legacyCount} 条原有凭证没并入资源</span><span className="mt-0.5 block text-[12.5px] text-[var(--ink-soft)]">并入后可以依次粘贴登录、在会话里 @ 引用，TOTP 一起带过来；原记录保留只读。</span></span>
