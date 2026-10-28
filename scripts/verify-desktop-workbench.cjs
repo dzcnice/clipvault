@@ -44,7 +44,7 @@ app.on('browser-window-created', (_event, window) => {
           if (page.title.includes(title) && !page.text.includes('正在读取本地资料')) break
         }
         const actual = window.getSize()
-        if (!page.api || !page.title.includes(title) || page.overflow || actual[0] !== width || actual[1] !== height || /启动失败|无法打开保险库/.test(page.text)) throw new Error('Desktop page failed: ' + route + ' at ' + actual.join('x'))
+        if (!page.api || !page.title.includes(title) || page.overflow || actual[0] !== width || actual[1] !== height || /启动失败|无法打开保险库/.test(page.text)) throw new Error('Desktop page failed: ' + route + ' at ' + actual.join('x') + ' title=' + JSON.stringify(page.title) + ' overflow=' + page.overflow + ' api=' + page.api)
         report.pages.push({ theme, route, requestedSize: [width,height], actualSize: window.getSize(), minimumSize: window.getMinimumSize(), resizable: window.isResizable(), title: page.title, documentOverflow: page.overflow })
         const path = join(profile, route + '-' + width + '-' + theme + '.png')
         writeFileSync(path, (await contents.capturePage()).toPNG()); report.screenshots.push(path)
